@@ -15,8 +15,17 @@ public sealed class JsonSuspicionRuleParserTests
             "mvp.json");
         string json = File.ReadAllText(path);
         InMemorySuspicionRuleRepository repository = JsonSuspicionRuleParser.Parse(json);
-        SuspicionRule rule = Assert.Single(repository.Rules);
+        SuspicionRule rule = repository.Rules[0];
 
+        Assert.Equal(4, repository.Rules.Count);
+        Assert.Equal(
+            [
+                "restricted_area_entry",
+                "witnessed_night_activity",
+                "witnessed_secret_meeting",
+                "witnessed_theft",
+            ],
+            repository.Rules.Select(item => item.Id));
         Assert.Equal("restricted_area_entry", rule.Id);
         Assert.Equal(EventType.EnterLocation, rule.EventType);
         Assert.Equal([EventTag.Restricted], rule.RequiredTags);

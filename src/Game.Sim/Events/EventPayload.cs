@@ -40,3 +40,14 @@ public sealed record LocationTransitionPayload : EventPayload
 
     public LocationId Destination { get; }
 }
+
+public sealed record SecretActivityPayload : EventPayload
+{
+    public SecretActivityPayload(string planId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(planId);
+        PlanId = planId.Trim();
+    }
+
+    public string PlanId { get; }
+}

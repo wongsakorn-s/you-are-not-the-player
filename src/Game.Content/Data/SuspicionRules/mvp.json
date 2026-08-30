@@ -9,5 +9,38 @@
       "roleDeviation": 20,
       "secrecy": 8
     }
+  },
+  {
+    "id": "witnessed_theft",
+    "match": {
+      "event": "Theft",
+      "requiredTags": ["Criminal"]
+    },
+    "effects": {
+      "criminality": 35,
+      "secrecy": 8
+    }
+  },
+  {
+    "id": "witnessed_secret_meeting",
+    "match": {
+      "event": "SecretMeeting",
+      "requiredTags": ["Secret"]
+    },
+    "effects": {
+      "secrecy": 20,
+      "roleDeviation": 4
+    }
+  },
+  {
+    "id": "witnessed_night_activity",
+    "match": {
+      "event": "NightActivity",
+      "requiredTags": ["AfterHours"]
+    },
+    "effects": {
+      "roleDeviation": 12,
+      "secrecy": 3
+    }
   }
 ]

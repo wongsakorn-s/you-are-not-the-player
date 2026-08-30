@@ -8,4 +8,7 @@ public enum GoalType
     Sleep = 4,
     Rest = 5,
     Socialize = 6,
+    Steal = 7,
+    MeetSecretly = 8,
+    WanderAtNight = 9,
 }

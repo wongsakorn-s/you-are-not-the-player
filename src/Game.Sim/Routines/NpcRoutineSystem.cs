@@ -12,13 +12,15 @@ public sealed class NpcRoutineSystem
     private readonly WorldState _world;
     private readonly MoveEntityActionHandler _movement;
     private readonly UtilityNpcBrain _brain;
+    private readonly IReadOnlyList<INpcRoutineDecisionObserver> _observers;
     private readonly Dictionary<EntityId, NpcRoutineProfile> _profiles = [];
 
     public NpcRoutineSystem(
         SimClock clock,
         WorldState world,
         MoveEntityActionHandler movement,
-        UtilityNpcBrain brain)
+        UtilityNpcBrain brain,
+        IEnumerable<INpcRoutineDecisionObserver>? observers = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(world);
@@ -28,6 +30,13 @@ public sealed class NpcRoutineSystem
         _world = world;
         _movement = movement;
         _brain = brain;
+        INpcRoutineDecisionObserver[] materializedObservers = observers?.ToArray() ?? [];
+        if (materializedObservers.Any(observer => observer is null))
+        {
+            throw new ArgumentException("Routine observers cannot contain null values.", nameof(observers));
+        }
+
+        _observers = Array.AsReadOnly(materializedObservers);
     }
 
     public void Register(NpcRoutineProfile profile)
@@ -60,7 +69,7 @@ public sealed class NpcRoutineSystem
             var context = new NpcDecisionContext(entity, profile, _clock.TimeOfDay);
             GoalCandidate goal = _brain.SelectGoal(context);
 
-            if (!profile.Role.CanEnter(goal.Destination))
+            if (!goal.IgnoresRolePermissions && !profile.Role.CanEnter(goal.Destination))
             {
                 throw new InvalidOperationException(
                     $"Goal '{goal.Type}' selected forbidden location '{goal.Destination}'.");
@@ -73,7 +82,13 @@ public sealed class NpcRoutineSystem
                 profile.ApplyRecovery(goal.Type, delta, _clock.TicksPerSecond);
             }
 
-            decisions.Add(new NpcRoutineDecision(_clock.Now, entity.Id, goal, moved));
+            var decision = new NpcRoutineDecision(_clock.Now, entity.Id, goal, moved);
+            foreach (INpcRoutineDecisionObserver observer in _observers)
+            {
+                observer.Observe(decision);
+            }
+
+            decisions.Add(decision);
         }
 
         return decisions;

@@ -8,7 +8,9 @@ public sealed class GoalCandidate
         GoalType type,
         LocationId destination,
         float baseUtility,
-        IEnumerable<UtilityReason>? reasons = null)
+        IEnumerable<UtilityReason>? reasons = null,
+        bool ignoresRolePermissions = false,
+        string? intentId = null)
     {
         if (!Enum.IsDefined(type))
         {
@@ -28,6 +30,11 @@ public sealed class GoalCandidate
                 "Base utility must be finite.");
         }
 
+        if (intentId is not null && string.IsNullOrWhiteSpace(intentId))
+        {
+            throw new ArgumentException("Goal intent ID cannot be blank.", nameof(intentId));
+        }
+
         UtilityReason[] materializedReasons = reasons?.ToArray() ?? [];
         float totalUtility = baseUtility + materializedReasons.Sum(reason => reason.Weight);
         if (!float.IsFinite(totalUtility))
@@ -42,6 +49,8 @@ public sealed class GoalCandidate
         BaseUtility = baseUtility;
         Reasons = Array.AsReadOnly(materializedReasons);
         TotalUtility = totalUtility;
+        IgnoresRolePermissions = ignoresRolePermissions;
+        IntentId = intentId?.Trim();
     }
 
     public GoalType Type { get; }
@@ -53,4 +62,8 @@ public sealed class GoalCandidate
     public IReadOnlyList<UtilityReason> Reasons { get; }
 
     public float TotalUtility { get; }
+
+    public bool IgnoresRolePermissions { get; }
+
+    public string? IntentId { get; }
 }

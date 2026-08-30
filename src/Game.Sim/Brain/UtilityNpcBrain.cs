@@ -22,7 +22,9 @@ public sealed class UtilityNpcBrain
 
         GoalCandidate? selected = _goalSources
             .SelectMany(source => source.Generate(context))
-            .Where(candidate => context.Profile.Role.CanEnter(candidate.Destination))
+            .Where(candidate =>
+                candidate.IgnoresRolePermissions ||
+                context.Profile.Role.CanEnter(candidate.Destination))
             .OrderByDescending(candidate => candidate.TotalUtility)
             .ThenBy(candidate => candidate.Type)
             .ThenBy(candidate => candidate.Destination.Value, StringComparer.Ordinal)

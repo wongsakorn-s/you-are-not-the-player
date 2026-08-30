@@ -8,14 +8,15 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง NPC Routine foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0 ถึง Secrets + False Positives foundation เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
 atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
 logical-location topology, visual/audio Observation, Episodic/Social MemoryStore,
 RootEventId rumor lineage, confidence decay, data-driven SuspicionRule,
 EvidenceContribution, SuspicionVector, daily Schedule, Needs, role permissions,
-deterministic Utility-based NPC Brain, headless SimRunner และ GitHub Actions CI
+deterministic Utility-based NPC Brain, Secret Plan สำหรับ theft/secret meeting/night owl,
+headless SimRunner และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -26,8 +27,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือ Phase 6: Secrets + False Positives โดยเพิ่มแรงจูงใจลับ
-และพฤติกรรมที่ดูน่าสงสัยแต่ไม่ใช่หลักฐานว่าเป็น Player
+เป้าหมายถัดไปคือ Phase 7: Suspicion-driven Behavior เพื่อให้ NPC เลือกสังเกต
+ติดตาม สอบถาม แบ่งปันความสงสัย หรือหลีกเลี่ยงเป้าหมายจากสิ่งที่ตัวเองเชื่อ
 
 ---
 
@@ -1898,6 +1899,9 @@ NPC 6 ตัวใช้ชีวิตครบหนึ่งวันโด�
 ---
 
 ## Phase 6 — Secrets + False Positives
+
+สถานะ: เสร็จแล้ว — theft, secret meeting และ night owl สร้าง event/evidence จริง
+โดย suspicion vector แยก Criminality ออกจากพฤติกรรม player-like ได้
 
 เพิ่ม:
 

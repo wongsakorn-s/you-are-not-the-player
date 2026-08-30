@@ -6,4 +6,7 @@ public enum EventTag
     Visible = 2,
     Audible = 3,
     Restricted = 4,
+    Criminal = 5,
+    Secret = 6,
+    AfterHours = 7,
 }
