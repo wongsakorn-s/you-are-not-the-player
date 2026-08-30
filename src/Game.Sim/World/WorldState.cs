@@ -7,6 +7,7 @@ public sealed class WorldState
 {
     private readonly Dictionary<EntityId, EntityState> _entities = [];
     private readonly Dictionary<LocationId, LocationState> _locations = [];
+    private readonly Dictionary<LocationPair, float> _audioConnections = [];
 
     public IReadOnlyList<EntityState> Entities => _entities.Values
         .OrderBy(entity => entity.Id.Value, StringComparer.Ordinal)
@@ -52,10 +53,62 @@ public sealed class WorldState
             ? location
             : throw new KeyNotFoundException($"Location '{id}' does not exist.");
 
+    public void ConnectLocations(
+        LocationId first,
+        LocationId second,
+        float audioTransmission = 1.0f)
+    {
+        _ = GetLocation(first);
+        _ = GetLocation(second);
+
+        if (first == second)
+        {
+            throw new ArgumentException("A location cannot be connected to itself.", nameof(second));
+        }
+
+        if (float.IsNaN(audioTransmission) || audioTransmission is < 0.0f or > 1.0f)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(audioTransmission),
+                audioTransmission,
+                "Audio transmission must be between 0 and 1 inclusive.");
+        }
+
+        LocationPair pair = LocationPair.Create(first, second);
+        if (!_audioConnections.TryAdd(pair, audioTransmission))
+        {
+            throw new InvalidOperationException(
+                $"Locations '{pair.First}' and '{pair.Second}' are already connected.");
+        }
+    }
+
+    public float? GetAudioTransmission(LocationId first, LocationId second)
+    {
+        _ = GetLocation(first);
+        _ = GetLocation(second);
+
+        if (first == second)
+        {
+            return 1.0f;
+        }
+
+        return _audioConnections.TryGetValue(LocationPair.Create(first, second), out float transmission)
+            ? transmission
+            : null;
+    }
+
     internal void RelocateEntity(EntityId entityId, LocationId destination)
     {
         EntityState entity = GetEntity(entityId);
         _ = GetLocation(destination);
         entity.MoveTo(destination);
+    }
+
+    private readonly record struct LocationPair(LocationId First, LocationId Second)
+    {
+        public static LocationPair Create(LocationId first, LocationId second) =>
+            string.CompareOrdinal(first.Value, second.Value) <= 0
+                ? new LocationPair(first, second)
+                : new LocationPair(second, first);
     }
 }

@@ -58,4 +58,34 @@ public sealed class WorldStateTests
         Assert.Equal([Basement, kitchen, Lobby], world.Locations.Select(location => location.Id));
         Assert.Equal([Anna, bob], world.Entities.Select(entity => entity.Id));
     }
+
+    [Fact]
+    public void ConnectLocations_CreatesSymmetricAudioConnection()
+    {
+        var world = new WorldState();
+        world.AddLocation(new LocationState(Lobby));
+        world.AddLocation(new LocationState(Basement));
+
+        world.ConnectLocations(Lobby, Basement, audioTransmission: 0.6f);
+
+        Assert.Equal(0.6f, world.GetAudioTransmission(Lobby, Basement));
+        Assert.Equal(0.6f, world.GetAudioTransmission(Basement, Lobby));
+        Assert.Equal(1.0f, world.GetAudioTransmission(Lobby, Lobby));
+    }
+
+    [Fact]
+    public void ConnectLocations_RejectsDuplicateAndInvalidConnections()
+    {
+        var world = new WorldState();
+        world.AddLocation(new LocationState(Lobby));
+        world.AddLocation(new LocationState(Basement));
+        world.ConnectLocations(Lobby, Basement);
+
+        Assert.Throws<InvalidOperationException>(() => world.ConnectLocations(Basement, Lobby));
+        Assert.Throws<ArgumentException>(() => world.ConnectLocations(Lobby, Lobby));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => world.ConnectLocations(Lobby, Basement, 1.1f));
+        Assert.Throws<KeyNotFoundException>(
+            () => world.GetAudioTransmission(Lobby, new LocationId("unknown")));
+    }
 }
