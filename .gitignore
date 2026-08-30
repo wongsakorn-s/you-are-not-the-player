@@ -1,0 +1,17 @@
+# Godot generated files
+**/.godot/
+**/android/
+
+# .NET build outputs
+**/bin/
+**/obj/
+
+# IDE and OS files
+.vs/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local logs
+logs/*.jsonl
