@@ -22,6 +22,7 @@ public sealed class ObservationTests
             new EntityId("george"),
             EventType.EnterLocation,
             new LocationId("basement"),
+            perceivedTags: [],
             SimTime.Zero,
             confidence,
             salience,

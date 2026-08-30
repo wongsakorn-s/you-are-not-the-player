@@ -17,4 +17,11 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Game.Sim\Game.Sim.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\src\Game.Content\Data\SuspicionRules\mvp.json">
+      <Link>Data\SuspicionRules\mvp.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>

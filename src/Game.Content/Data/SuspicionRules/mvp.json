@@ -1,0 +1,13 @@
+[
+  {
+    "id": "restricted_area_entry",
+    "match": {
+      "event": "EnterLocation",
+      "requiredTags": ["Restricted"]
+    },
+    "effects": {
+      "roleDeviation": 20,
+      "secrecy": 8
+    }
+  }
+]

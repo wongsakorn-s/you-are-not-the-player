@@ -14,6 +14,7 @@ public sealed class MemoryRecord
         EntityId? subject,
         EventType eventType,
         LocationId? location,
+        IEnumerable<EventTag> tags,
         SimTime eventTime,
         SimTime createdAt,
         float initialConfidence,
@@ -28,6 +29,7 @@ public sealed class MemoryRecord
         Subject = subject;
         EventType = eventType;
         Location = location;
+        Tags = Array.AsReadOnly(tags.Distinct().Order().ToArray());
         EventTime = eventTime;
         CreatedAt = createdAt;
         InitialConfidence = initialConfidence;
@@ -47,6 +49,8 @@ public sealed class MemoryRecord
     public EventType EventType { get; }
 
     public LocationId? Location { get; }
+
+    public IReadOnlyList<EventTag> Tags { get; }
 
     public SimTime EventTime { get; }
 
@@ -75,6 +79,7 @@ public sealed class MemoryRecord
             observation.PerceivedActor,
             observation.PerceivedType,
             observation.Location,
+            observation.PerceivedTags,
             observation.Time,
             observation.Time,
             observation.Confidence,
@@ -116,6 +121,7 @@ public sealed class MemoryRecord
             sourceMemory.Subject,
             sourceMemory.EventType,
             sourceMemory.Location,
+            sourceMemory.Tags,
             sourceMemory.EventTime,
             createdAt,
             initialConfidence,

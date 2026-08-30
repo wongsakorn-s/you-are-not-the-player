@@ -27,6 +27,7 @@ public sealed class MemorySystemTests
         Assert.Equal(new MemoryId(1), memory.Id);
         Assert.Equal(MemoryKind.Episodic, memory.Kind);
         Assert.Equal(George, memory.Subject);
+        Assert.Equal([EventTag.Visible], memory.Tags);
         Assert.Equal(new EventId(9), memory.RootEventId);
         Assert.Equal(observation.Id, memory.SourceObservationId);
         Assert.Null(memory.InformationSource);
@@ -110,6 +111,30 @@ public sealed class MemorySystemTests
     }
 
     [Fact]
+    public void Remember_RejectsSubjectOutsideWorldWithoutConsumingId()
+    {
+        MemorySystem system = CreateSystem();
+        var invalidObservation = new Observation(
+            new ObservationId(1),
+            new EventId(1),
+            Anna,
+            new EntityId("unknown"),
+            EventType.EnterLocation,
+            Basement,
+            [EventTag.Visible],
+            SimTime.Zero,
+            confidence: 0.9f,
+            salience: 0.5f,
+            PerceptionChannel.Visual);
+
+        Assert.Throws<KeyNotFoundException>(() => system.Remember(invalidObservation));
+        MemoryRecord validMemory = Assert.IsType<MemoryRecord>(
+            system.Remember(CreateObservation(Anna, sourceEvent: 2, time: 0)));
+
+        Assert.Equal(new MemoryId(1), validMemory.Id);
+    }
+
+    [Fact]
     public void GetRetainedConfidence_UsesMemoryKindDecayRate()
     {
         MemorySystem system = CreateSystem(
@@ -170,7 +195,8 @@ public sealed class MemorySystemTests
         EntityId observer,
         long sourceEvent,
         long time,
-        float confidence = 0.9f) =>
+        float confidence = 0.9f,
+        IReadOnlyCollection<EventTag>? tags = null) =>
         new(
             new ObservationId(sourceEvent),
             new EventId(sourceEvent),
@@ -178,6 +204,7 @@ public sealed class MemorySystemTests
             George,
             EventType.EnterLocation,
             Basement,
+            tags ?? [EventTag.Visible],
             new SimTime(time),
             confidence,
             salience: 0.5f,

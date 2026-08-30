@@ -14,6 +14,7 @@ public sealed class Observation
         EntityId? perceivedActor,
         EventType perceivedType,
         LocationId? location,
+        IEnumerable<EventTag>? perceivedTags,
         SimTime time,
         float confidence,
         float salience,
@@ -54,6 +55,17 @@ public sealed class Observation
                 "Unknown perceived event type.");
         }
 
+        EventTag[] materializedTags = perceivedTags?
+            .Distinct()
+            .Order()
+            .ToArray() ?? [];
+        if (materializedTags.Any(tag => !Enum.IsDefined(tag)))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(perceivedTags),
+                "Perceived tags contain an unknown value.");
+        }
+
         ValidateUnitInterval(confidence, nameof(confidence));
         ValidateUnitInterval(salience, nameof(salience));
 
@@ -68,6 +80,7 @@ public sealed class Observation
         PerceivedActor = perceivedActor;
         PerceivedType = perceivedType;
         Location = location;
+        PerceivedTags = Array.AsReadOnly(materializedTags);
         Time = time;
         Confidence = confidence;
         Salience = salience;
@@ -85,6 +98,8 @@ public sealed class Observation
     public EventType PerceivedType { get; }
 
     public LocationId? Location { get; }
+
+    public IReadOnlyList<EventTag> PerceivedTags { get; }
 
     public SimTime Time { get; }
 

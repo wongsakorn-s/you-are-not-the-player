@@ -43,6 +43,11 @@ public sealed class MemorySystem
         ArgumentNullException.ThrowIfNull(observation);
         MemoryStore store = GetStore(observation.Observer);
 
+        if (observation.PerceivedActor is EntityId subject)
+        {
+            _ = _world.GetEntity(subject);
+        }
+
         if (store.KnowsRootEvent(observation.SourceEvent))
         {
             return null;
