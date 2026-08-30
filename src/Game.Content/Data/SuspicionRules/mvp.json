@@ -42,5 +42,48 @@
       "roleDeviation": 12,
       "secrecy": 3
     }
+  },
+  {
+    "id": "detected_loot_sweep",
+    "match": {
+      "event": "BehaviorPattern",
+      "pattern": "LootSweep"
+    },
+    "effects": {
+      "metaBehavior": 35,
+      "roleDeviation": 15
+    }
+  },
+  {
+    "id": "detected_repeat_interaction",
+    "match": {
+      "event": "BehaviorPattern",
+      "pattern": "RepeatInteraction"
+    },
+    "effects": {
+      "metaBehavior": 20,
+      "roleDeviation": 5
+    }
+  },
+  {
+    "id": "detected_role_neglect",
+    "match": {
+      "event": "BehaviorPattern",
+      "pattern": "RoleNeglect"
+    },
+    "effects": {
+      "roleDeviation": 25
+    }
+  },
+  {
+    "id": "detected_boundary_testing",
+    "match": {
+      "event": "BehaviorPattern",
+      "pattern": "BoundaryTesting"
+    },
+    "effects": {
+      "metaBehavior": 30,
+      "impossibleBehavior": 10
+    }
   }
 ]

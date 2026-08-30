@@ -22,7 +22,8 @@ public sealed class MemoryRecord
         EntityId? informationSource,
         EventId rootEventId,
         ObservationId? sourceObservationId,
-        MemoryId? sourceMemoryId)
+        MemoryId? sourceMemoryId,
+        BehaviorPatternKind? behaviorPattern)
     {
         Id = id;
         Kind = kind;
@@ -38,6 +39,7 @@ public sealed class MemoryRecord
         RootEventId = rootEventId;
         SourceObservationId = sourceObservationId;
         SourceMemoryId = sourceMemoryId;
+        BehaviorPattern = behaviorPattern;
     }
 
     public MemoryId Id { get; }
@@ -68,6 +70,8 @@ public sealed class MemoryRecord
 
     public MemoryId? SourceMemoryId { get; }
 
+    public BehaviorPatternKind? BehaviorPattern { get; }
+
     public static MemoryRecord FromObservation(MemoryId id, Observation observation)
     {
         ValidateId(id);
@@ -87,7 +91,8 @@ public sealed class MemoryRecord
             informationSource: null,
             observation.SourceEvent,
             observation.Id,
-            sourceMemoryId: null);
+            sourceMemoryId: null,
+            observation.BehaviorPattern);
     }
 
     public static MemoryRecord FromSharedMemory(
@@ -129,7 +134,8 @@ public sealed class MemoryRecord
             informationSource,
             sourceMemory.RootEventId,
             sourceObservationId: null,
-            sourceMemory.Id);
+            sourceMemory.Id,
+            sourceMemory.BehaviorPattern);
     }
 
     private static void ValidateId(MemoryId id)

@@ -10,7 +10,8 @@ public sealed class SuspicionRule
         EventType eventType,
         IEnumerable<EventTag>? requiredTags,
         MemoryKind? memoryKind,
-        IEnumerable<SuspicionEffect> effects)
+        IEnumerable<SuspicionEffect> effects,
+        BehaviorPatternKind? behaviorPattern = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(id);
         ArgumentNullException.ThrowIfNull(effects);
@@ -23,6 +24,21 @@ public sealed class SuspicionRule
         if (memoryKind is not null && !Enum.IsDefined(memoryKind.Value))
         {
             throw new ArgumentOutOfRangeException(nameof(memoryKind), memoryKind, "Unknown memory kind.");
+        }
+
+        if (behaviorPattern is not null && !Enum.IsDefined(behaviorPattern.Value))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(behaviorPattern),
+                behaviorPattern,
+                "Unknown behavior pattern.");
+        }
+
+        if (behaviorPattern is not null && eventType != EventType.BehaviorPattern)
+        {
+            throw new ArgumentException(
+                "A behavior pattern matcher requires the BehaviorPattern event type.",
+                nameof(behaviorPattern));
         }
 
         EventTag[] materializedTags = requiredTags?
@@ -57,6 +73,7 @@ public sealed class SuspicionRule
         RequiredTags = Array.AsReadOnly(materializedTags);
         MemoryKind = memoryKind;
         Effects = Array.AsReadOnly(materializedEffects);
+        BehaviorPattern = behaviorPattern;
     }
 
     public string Id { get; }
@@ -69,12 +86,15 @@ public sealed class SuspicionRule
 
     public IReadOnlyList<SuspicionEffect> Effects { get; }
 
+    public BehaviorPatternKind? BehaviorPattern { get; }
+
     public bool Matches(MemoryRecord memory)
     {
         ArgumentNullException.ThrowIfNull(memory);
 
         return memory.EventType == EventType &&
             (MemoryKind is null || memory.Kind == MemoryKind) &&
+            (BehaviorPattern is null || memory.BehaviorPattern == BehaviorPattern) &&
             RequiredTags.All(memory.Tags.Contains);
     }
 }

@@ -7,7 +7,7 @@ namespace Game.Sim.Suspicion;
 public static class JsonSuspicionRuleParser
 {
     private static readonly string[] RuleProperties = ["id", "match", "effects"];
-    private static readonly string[] MatchProperties = ["event", "requiredTags", "memoryKind"];
+    private static readonly string[] MatchProperties = ["event", "requiredTags", "memoryKind", "pattern"];
 
     public static InMemorySuspicionRuleRepository Parse(string json)
     {
@@ -56,10 +56,23 @@ public static class JsonSuspicionRuleParser
                 GetString(memoryKindElement, $"rule '{id}' memoryKind"),
                 $"rule '{id}' memoryKind")
             : null;
+        BehaviorPatternKind? behaviorPattern = match.TryGetProperty(
+            "pattern",
+            out JsonElement patternElement)
+            ? ParseEnum<BehaviorPatternKind>(
+                GetString(patternElement, $"rule '{id}' pattern"),
+                $"rule '{id}' pattern")
+            : null;
         EventTag[] requiredTags = ParseRequiredTags(match, id);
         List<SuspicionEffect> effects = ParseEffects(element, id);
 
-        return new SuspicionRule(id, eventType, requiredTags, memoryKind, effects);
+        return new SuspicionRule(
+            id,
+            eventType,
+            requiredTags,
+            memoryKind,
+            effects,
+            behaviorPattern);
     }
 
     private static EventTag[] ParseRequiredTags(JsonElement match, string ruleId)

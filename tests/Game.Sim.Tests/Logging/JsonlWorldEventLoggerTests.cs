@@ -54,4 +54,30 @@ public sealed class JsonlWorldEventLoggerTests
         Assert.NotEmpty(lines[1]);
         Assert.Empty(lines[2]);
     }
+
+    [Fact]
+    public void Write_SerializesBehaviorPatternEvidenceDeterministically()
+    {
+        using var output = new StringWriter(CultureInfo.InvariantCulture);
+        var logger = new JsonlWorldEventLogger(output);
+        var worldEvent = new WorldEvent(
+            new EventId(12),
+            new SimTime(20),
+            George,
+            EventType.BehaviorPattern,
+            Lobby,
+            tags: [EventTag.Pattern],
+            payload: new BehaviorPatternPayload(
+                BehaviorPatternKind.LootSweep,
+                [new EventId(9), new EventId(3)]));
+
+        logger.Write(worldEvent);
+
+        const string expected =
+            "{\"schemaVersion\":1,\"id\":12,\"tick\":20,\"type\":\"BehaviorPattern\"," +
+            "\"actor\":\"george\",\"target\":null,\"location\":\"lobby\"," +
+            "\"tags\":[\"Pattern\"],\"payload\":{\"type\":\"behaviorPattern\"," +
+            "\"pattern\":\"LootSweep\",\"evidenceEvents\":[3,9]}}\n";
+        Assert.Equal(expected, output.ToString());
+    }
 }

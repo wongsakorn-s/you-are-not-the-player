@@ -8,7 +8,7 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง Suspicion-driven Behavior foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0 ถึง Behavior Pattern Detector foundation เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
 atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
@@ -16,8 +16,9 @@ logical-location topology, visual/audio Observation, Episodic/Social MemoryStore
 RootEventId rumor lineage, confidence decay, data-driven SuspicionRule,
 EvidenceContribution, SuspicionVector, daily Schedule, Needs, role permissions,
 deterministic Utility-based NPC Brain, Secret Plan สำหรับ theft/secret meeting/night owl,
-belief-driven goals สำหรับ observe/follow/ask/share/avoid, headless SimRunner
-และ GitHub Actions CI
+belief-driven goals สำหรับ observe/follow/ask/share/avoid,
+rule-based detector สำหรับ LootSweep/RepeatInteraction/RoleNeglect/BoundaryTesting,
+headless SimRunner และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -28,8 +29,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือ Phase 8: Behavior Pattern Detector เพื่อค้นหารูปแบบ
-LootSweep, RepeatInteraction, RoleNeglect และ BoundaryTesting จาก event stream
+เป้าหมายถัดไปคือ Phase 9: Player AI Prototype โดยสร้าง Explorer, Completionist
+และ Roleplayer ให้ใช้ action/event system เดียวกับ NPC ปกติ
 
 ---
 
@@ -1945,6 +1946,9 @@ NPC เปลี่ยนพฤติกรรมเพราะสิ่งท�
 ---
 
 ## Phase 8 — Behavior Pattern Detector
+
+สถานะ: เสร็จแล้ว — detector ประมวลผล event stream แบบ incremental/deterministic,
+emit pattern ต่อเนื่องเพียงครั้งเดียว และเก็บ EventId ต้นเหตุเพื่ออธิบายผลได้
 
 เพิ่ม:
 

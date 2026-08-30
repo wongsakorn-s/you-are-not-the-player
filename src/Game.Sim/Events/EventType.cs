@@ -7,4 +7,8 @@ public enum EventType
     Theft = 3,
     SecretMeeting = 4,
     NightActivity = 5,
+    Interaction = 6,
+    RoleDutyMissed = 7,
+    BoundaryProbe = 8,
+    BehaviorPattern = 9,
 }

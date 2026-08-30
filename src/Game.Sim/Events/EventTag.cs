@@ -9,4 +9,5 @@ public enum EventTag
     Criminal = 5,
     Secret = 6,
     AfterHours = 7,
+    Pattern = 8,
 }

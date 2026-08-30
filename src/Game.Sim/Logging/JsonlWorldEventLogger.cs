@@ -77,6 +77,34 @@ public sealed class JsonlWorldEventLogger : IWorldEventLogger
                 json.WriteString("origin", transition.Origin.Value);
                 json.WriteString("destination", transition.Destination.Value);
                 break;
+            case SecretActivityPayload secret:
+                json.WriteString("type", "secretActivity");
+                json.WriteString("planId", secret.PlanId);
+                break;
+            case InteractionPayload interaction:
+                json.WriteString("type", "interaction");
+                json.WriteString("kind", interaction.Kind.ToString());
+                json.WriteString("interactionId", interaction.InteractionId);
+                break;
+            case RoleDutyPayload roleDuty:
+                json.WriteString("type", "roleDuty");
+                json.WriteString("dutyId", roleDuty.DutyId);
+                break;
+            case BoundaryProbePayload boundaryProbe:
+                json.WriteString("type", "boundaryProbe");
+                json.WriteString("boundaryId", boundaryProbe.BoundaryId);
+                break;
+            case BehaviorPatternPayload pattern:
+                json.WriteString("type", "behaviorPattern");
+                json.WriteString("pattern", pattern.Pattern.ToString());
+                json.WriteStartArray("evidenceEvents");
+                foreach (EventId evidenceEvent in pattern.EvidenceEvents)
+                {
+                    json.WriteNumberValue(evidenceEvent.Value);
+                }
+
+                json.WriteEndArray();
+                break;
             default:
                 throw new NotSupportedException(
                     $"Payload type '{payload.GetType().Name}' is not supported by the JSONL logger.");

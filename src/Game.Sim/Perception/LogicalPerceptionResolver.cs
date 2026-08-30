@@ -114,5 +114,6 @@ public sealed class LogicalPerceptionResolver : IPerceptionResolver
             worldEvent.Time,
             confidence,
             salience,
-            channel);
+            channel,
+            worldEvent.Payload is BehaviorPatternPayload pattern ? pattern.Pattern : null);
 }

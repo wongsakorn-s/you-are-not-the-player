@@ -18,7 +18,8 @@ public sealed class Observation
         SimTime time,
         float confidence,
         float salience,
-        PerceptionChannel channel)
+        PerceptionChannel channel,
+        BehaviorPatternKind? behaviorPattern = null)
     {
         if (id.IsEmpty)
         {
@@ -74,6 +75,14 @@ public sealed class Observation
             throw new ArgumentOutOfRangeException(nameof(channel), channel, "Unknown perception channel.");
         }
 
+        if (behaviorPattern is not null && !Enum.IsDefined(behaviorPattern.Value))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(behaviorPattern),
+                behaviorPattern,
+                "Unknown behavior pattern.");
+        }
+
         Id = id;
         SourceEvent = sourceEvent;
         Observer = observer;
@@ -85,6 +94,7 @@ public sealed class Observation
         Confidence = confidence;
         Salience = salience;
         Channel = channel;
+        BehaviorPattern = behaviorPattern;
     }
 
     public ObservationId Id { get; }
@@ -108,6 +118,8 @@ public sealed class Observation
     public float Salience { get; }
 
     public PerceptionChannel Channel { get; }
+
+    public BehaviorPatternKind? BehaviorPattern { get; }
 
     private static void ValidateUnitInterval(float value, string parameterName)
     {

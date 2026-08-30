@@ -15,11 +15,15 @@ public sealed class JsonSuspicionRuleParserTests
             "mvp.json");
         string json = File.ReadAllText(path);
         InMemorySuspicionRuleRepository repository = JsonSuspicionRuleParser.Parse(json);
-        SuspicionRule rule = repository.Rules[0];
+        SuspicionRule rule = repository.Rules[4];
 
-        Assert.Equal(4, repository.Rules.Count);
+        Assert.Equal(8, repository.Rules.Count);
         Assert.Equal(
             [
+                "detected_boundary_testing",
+                "detected_loot_sweep",
+                "detected_repeat_interaction",
+                "detected_role_neglect",
                 "restricted_area_entry",
                 "witnessed_night_activity",
                 "witnessed_secret_meeting",
@@ -32,12 +36,19 @@ public sealed class JsonSuspicionRuleParserTests
         Assert.Equal(
             [SuspicionDimension.Secrecy, SuspicionDimension.RoleDeviation],
             rule.Effects.Select(effect => effect.Dimension));
+        SuspicionRule lootSweep = Assert.Single(
+            repository.Rules,
+            item => item.Id == "detected_loot_sweep");
+        Assert.Equal(EventType.BehaviorPattern, lootSweep.EventType);
+        Assert.Equal(BehaviorPatternKind.LootSweep, lootSweep.BehaviorPattern);
     }
 
     [Theory]
     [InlineData("{\"id\":\"not-an-array\"}")]
     [InlineData("[{\"id\":\"bad\",\"match\":{\"event\":\"Unknown\"},\"effects\":{\"secrecy\":1}}]")]
     [InlineData("[{\"id\":\"bad\",\"match\":{\"event\":\"EnterLocation\",\"extra\":1},\"effects\":{\"secrecy\":1}}]")]
+    [InlineData("[{\"id\":\"bad\",\"match\":{\"event\":\"BehaviorPattern\",\"pattern\":\"Unknown\"},\"effects\":{\"secrecy\":1}}]")]
+    [InlineData("[{\"id\":\"bad\",\"match\":{\"event\":\"EnterLocation\",\"pattern\":\"LootSweep\"},\"effects\":{\"secrecy\":1}}]")]
     [InlineData("[{\"id\":\"bad\",\"match\":{\"event\":\"EnterLocation\"},\"effects\":{\"unknown\":1}}]")]
     [InlineData("[{\"id\":\"bad\",\"match\":{\"event\":\"EnterLocation\"},\"effects\":{\"secrecy\":-1}}]")]
     public void Parse_RejectsInvalidConfiguration(string json)
