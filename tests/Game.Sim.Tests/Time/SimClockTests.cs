@@ -25,6 +25,22 @@ public sealed class SimClockTests
     }
 
     [Fact]
+    public void Advance_TracksDayAndMinuteOfDayAcrossMidnight()
+    {
+        var clock = new SimClock(ticksPerSecond: 1);
+
+        clock.Advance(new SimDelta(86_399));
+
+        Assert.Equal(0, clock.DayIndex);
+        Assert.Equal(SimMinuteOfDay.FromHourMinute(23, 59), clock.TimeOfDay);
+
+        clock.AdvanceOneTick();
+
+        Assert.Equal(1, clock.DayIndex);
+        Assert.Equal(SimMinuteOfDay.FromHourMinute(0, 0), clock.TimeOfDay);
+    }
+
+    [Fact]
     public void Constructor_RejectsInvalidTickRate()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new SimClock(0));

@@ -8,13 +8,14 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง Suspicion foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0 ถึง NPC Routine foundation เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
 atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
 logical-location topology, visual/audio Observation, Episodic/Social MemoryStore,
 RootEventId rumor lineage, confidence decay, data-driven SuspicionRule,
-EvidenceContribution, SuspicionVector, headless SimRunner และ GitHub Actions CI
+EvidenceContribution, SuspicionVector, daily Schedule, Needs, role permissions,
+deterministic Utility-based NPC Brain, headless SimRunner และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -25,8 +26,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือสร้าง Schedule, Needs และ Utility-based NPC Brain
-เพื่อให้ NPC มี routine ที่คาดเดาได้ก่อนเพิ่ม secrets และ false positives
+เป้าหมายถัดไปคือ Phase 6: Secrets + False Positives โดยเพิ่มแรงจูงใจลับ
+และพฤติกรรมที่ดูน่าสงสัยแต่ไม่ใช่หลักฐานว่าเป็น Player
 
 ---
 
@@ -1876,6 +1877,9 @@ DoD:
 ---
 
 ## Phase 5 — NPC Routine
+
+สถานะ: เสร็จแล้ว — มี automated test จำลอง NPC 6 ตัวครบ 1 วัน
+และยืนยันว่า decisions/events ทำซ้ำได้แบบ deterministic
 
 สร้าง:
 
