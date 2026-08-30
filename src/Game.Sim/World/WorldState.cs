@@ -52,7 +52,7 @@ public sealed class WorldState
             ? location
             : throw new KeyNotFoundException($"Location '{id}' does not exist.");
 
-    public void MoveEntity(EntityId entityId, LocationId destination)
+    internal void RelocateEntity(EntityId entityId, LocationId destination)
     {
         EntityState entity = GetEntity(entityId);
         _ = GetLocation(destination);

@@ -77,4 +77,16 @@ public sealed class EventSystemTests
         Assert.Equal(lobby, payload.Origin);
         Assert.Equal(Basement, payload.Destination);
     }
+
+    [Fact]
+    public void PublishBatch_RejectsInvalidBatchWithoutPublishingPartialData()
+    {
+        var factory = new WorldEventFactory(new SimClock(), new SequentialEventIdGenerator());
+        var buffer = new WorldEventBuffer();
+        WorldEvent validEvent = factory.Create(George, EventType.EnterLocation, Basement);
+        WorldEvent[] invalidBatch = [validEvent, null!];
+
+        Assert.Throws<ArgumentException>(() => buffer.PublishBatch(invalidBatch));
+        Assert.Equal(0, buffer.Count);
+    }
 }

@@ -12,6 +12,18 @@ public sealed class WorldEventBuffer : IWorldEventBuffer
         _pending.Add(worldEvent);
     }
 
+    public void PublishBatch(IReadOnlyCollection<WorldEvent> worldEvents)
+    {
+        ArgumentNullException.ThrowIfNull(worldEvents);
+
+        if (worldEvents.Any(worldEvent => worldEvent is null))
+        {
+            throw new ArgumentException("An event batch cannot contain null values.", nameof(worldEvents));
+        }
+
+        _pending.AddRange(worldEvents);
+    }
+
     public IReadOnlyList<WorldEvent> Drain()
     {
         if (_pending.Count == 0)

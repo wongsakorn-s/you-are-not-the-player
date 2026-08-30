@@ -6,5 +6,7 @@ public interface IWorldEventBuffer
 
     void Publish(WorldEvent worldEvent);
 
+    void PublishBatch(IReadOnlyCollection<WorldEvent> worldEvents);
+
     IReadOnlyList<WorldEvent> Drain();
 }

@@ -44,30 +44,6 @@ public sealed class WorldStateTests
     }
 
     [Fact]
-    public void MoveEntity_ChangesLogicalLocation()
-    {
-        var world = new WorldState();
-        world.AddLocation(new LocationState(Lobby));
-        world.AddLocation(new LocationState(Basement));
-        world.AddEntity(new EntityState(Anna, Lobby));
-
-        world.MoveEntity(Anna, Basement);
-
-        Assert.Equal(Basement, world.GetEntity(Anna).LogicalLocation);
-    }
-
-    [Fact]
-    public void MoveEntity_RejectsUnknownDestination()
-    {
-        var world = new WorldState();
-        world.AddLocation(new LocationState(Lobby));
-        world.AddEntity(new EntityState(Anna, Lobby));
-
-        Assert.Throws<KeyNotFoundException>(() => world.MoveEntity(Anna, Basement));
-        Assert.Equal(Lobby, world.GetEntity(Anna).LogicalLocation);
-    }
-
-    [Fact]
     public void Collections_AreReturnedInStableIdentifierOrder()
     {
         var world = new WorldState();

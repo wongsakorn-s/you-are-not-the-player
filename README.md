@@ -8,10 +8,11 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 และ World + Event foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0, World + Event foundation และ movement action pipeline เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
-xUnit tests, headless SimRunner และ GitHub Actions CI
+atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
+headless SimRunner และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -22,8 +23,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือเพิ่ม JSONL event logger และ Move/EnterLocation action pipeline
-ก่อนเริ่ม Perception System และ The Basement Test
+เป้าหมายถัดไปคือสร้าง PerceptionResolver และ Observation เพื่อให้ NPC แต่ละตัว
+รับรู้ WorldEvent แตกต่างกันตาม logical location ก่อนเริ่ม The Basement Test
 
 ---
 
