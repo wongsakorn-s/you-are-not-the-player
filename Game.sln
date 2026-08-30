@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game.Sim", "src\Game.Sim\Game.Sim.csproj", "{A0A44E65-2C90-47A0-920A-7F99620E8D29}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game.Sim.Tests", "tests\Game.Sim.Tests\Game.Sim.Tests.csproj", "{B192E3B5-EC16-4867-9F5E-88067F6DB710}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimRunner", "tools\SimRunner\SimRunner.csproj", "{C286C927-8205-46F7-A8CF-7A6163BF857D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A0A44E65-2C90-47A0-920A-7F99620E8D29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0A44E65-2C90-47A0-920A-7F99620E8D29}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0A44E65-2C90-47A0-920A-7F99620E8D29}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0A44E65-2C90-47A0-920A-7F99620E8D29}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B192E3B5-EC16-4867-9F5E-88067F6DB710}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B192E3B5-EC16-4867-9F5E-88067F6DB710}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B192E3B5-EC16-4867-9F5E-88067F6DB710}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B192E3B5-EC16-4867-9F5E-88067F6DB710}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C286C927-8205-46F7-A8CF-7A6163BF857D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C286C927-8205-46F7-A8CF-7A6163BF857D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C286C927-8205-46F7-A8CF-7A6163BF857D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C286C927-8205-46F7-A8CF-7A6163BF857D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

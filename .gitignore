@@ -5,11 +5,15 @@
 # .NET build outputs
 **/bin/
 **/obj/
+**/TestResults/
+coverage/
 
 # IDE and OS files
 .vs/
 .idea/
 .vscode/
+*.suo
+*.user
 .DS_Store
 Thumbs.db
 

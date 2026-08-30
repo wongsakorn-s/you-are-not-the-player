@@ -6,6 +6,25 @@
 
 ---
 
+## สถานะการพัฒนาปัจจุบัน
+
+Milestone 0 เริ่มต้นแล้ว โดยมี Pure C# simulation, deterministic simulation clock,
+seeded PCG32 random, xUnit tests, headless SimRunner และ GitHub Actions CI
+
+คำสั่งตรวจสอบระบบ:
+
+```bash
+dotnet restore Game.sln
+dotnet build Game.sln --configuration Release --no-restore
+dotnet test Game.sln --configuration Release --no-build
+dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
+```
+
+เป้าหมายถัดไปคือเพิ่ม Entity/Location model และ immutable WorldEvent เพื่อเริ่มสร้าง
+The Basement Test
+
+---
+
 ## 0. Game Concept และที่มาของระบบ
 
 ## 0.1 แนวคิดหลักของเกม
