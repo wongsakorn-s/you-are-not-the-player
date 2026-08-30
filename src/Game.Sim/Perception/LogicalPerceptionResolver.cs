@@ -110,6 +110,7 @@ public sealed class LogicalPerceptionResolver : IPerceptionResolver
             perceivedActor,
             worldEvent.Type,
             worldEvent.Location,
+            worldEvent.Time,
             confidence,
             salience,
             channel);

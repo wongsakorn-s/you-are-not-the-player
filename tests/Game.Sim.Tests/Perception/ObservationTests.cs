@@ -2,6 +2,7 @@ using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
 using Game.Sim.Perception;
+using Game.Sim.Time;
 
 namespace Game.Sim.Tests.Perception;
 
@@ -21,6 +22,7 @@ public sealed class ObservationTests
             new EntityId("george"),
             EventType.EnterLocation,
             new LocationId("basement"),
+            SimTime.Zero,
             confidence,
             salience,
             PerceptionChannel.Visual));

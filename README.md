@@ -8,11 +8,12 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0, World + Event, movement action และ Perception foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0, World + Event, movement action, Perception และ Memory foundation เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
 atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
-logical-location topology, visual/audio Observation, headless SimRunner และ GitHub Actions CI
+logical-location topology, visual/audio Observation, Episodic/Social MemoryStore,
+RootEventId rumor lineage, confidence decay, headless SimRunner และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -23,8 +24,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือสร้าง Episodic/Social MemoryStore, confidence decay และ RootEventId
-เพื่อให้ NPC เก็บสิ่งที่เห็นกับสิ่งที่ได้ยินจากผู้อื่นแยกกัน
+เป้าหมายถัดไปคือสร้าง SuspicionVector, EvidenceContribution และ data-driven rules
+เพื่อให้ทุกคะแนนความสงสัยอธิบายย้อนกลับไปยัง MemoryRecord ได้
 
 ---
 

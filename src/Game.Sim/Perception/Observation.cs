@@ -1,6 +1,7 @@
 using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
+using Game.Sim.Time;
 
 namespace Game.Sim.Perception;
 
@@ -13,6 +14,7 @@ public sealed class Observation
         EntityId? perceivedActor,
         EventType perceivedType,
         LocationId? location,
+        SimTime time,
         float confidence,
         float salience,
         PerceptionChannel channel)
@@ -66,6 +68,7 @@ public sealed class Observation
         PerceivedActor = perceivedActor;
         PerceivedType = perceivedType;
         Location = location;
+        Time = time;
         Confidence = confidence;
         Salience = salience;
         Channel = channel;
@@ -82,6 +85,8 @@ public sealed class Observation
     public EventType PerceivedType { get; }
 
     public LocationId? Location { get; }
+
+    public SimTime Time { get; }
 
     public float Confidence { get; }
 
