@@ -8,7 +8,7 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง Secrets + False Positives foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0 ถึง Suspicion-driven Behavior foundation เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
 atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
@@ -16,7 +16,8 @@ logical-location topology, visual/audio Observation, Episodic/Social MemoryStore
 RootEventId rumor lineage, confidence decay, data-driven SuspicionRule,
 EvidenceContribution, SuspicionVector, daily Schedule, Needs, role permissions,
 deterministic Utility-based NPC Brain, Secret Plan สำหรับ theft/secret meeting/night owl,
-headless SimRunner และ GitHub Actions CI
+belief-driven goals สำหรับ observe/follow/ask/share/avoid, headless SimRunner
+และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -27,8 +28,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือ Phase 7: Suspicion-driven Behavior เพื่อให้ NPC เลือกสังเกต
-ติดตาม สอบถาม แบ่งปันความสงสัย หรือหลีกเลี่ยงเป้าหมายจากสิ่งที่ตัวเองเชื่อ
+เป้าหมายถัดไปคือ Phase 8: Behavior Pattern Detector เพื่อค้นหารูปแบบ
+LootSweep, RepeatInteraction, RoleNeglect และ BoundaryTesting จาก event stream
 
 ---
 
@@ -1920,6 +1921,9 @@ NPC ปกติสามารถมีพฤติกรรมน่าสง�
 ---
 
 ## Phase 7 — Suspicion-driven Behavior
+
+สถานะ: เสร็จแล้ว — goal ทั้ง 5 แบบสร้างจาก suspicion evidence และตำแหน่งล่าสุด
+ใน memory ของ NPC โดยไม่อ่านตำแหน่งจริงของเป้าหมายจาก WorldState
 
 เพิ่ม goal:
 

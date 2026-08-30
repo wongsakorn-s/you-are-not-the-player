@@ -28,6 +28,7 @@ public sealed class UtilityNpcBrain
             .OrderByDescending(candidate => candidate.TotalUtility)
             .ThenBy(candidate => candidate.Type)
             .ThenBy(candidate => candidate.Destination.Value, StringComparer.Ordinal)
+            .ThenBy(candidate => candidate.IntentId, StringComparer.Ordinal)
             .FirstOrDefault();
 
         return selected ?? new GoalCandidate(

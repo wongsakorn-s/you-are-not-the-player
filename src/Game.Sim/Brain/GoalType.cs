@@ -11,4 +11,9 @@ public enum GoalType
     Steal = 7,
     MeetSecretly = 8,
     WanderAtNight = 9,
+    ObserveTarget = 10,
+    FollowTarget = 11,
+    AskAboutTarget = 12,
+    ShareSuspicion = 13,
+    AvoidTarget = 14,
 }

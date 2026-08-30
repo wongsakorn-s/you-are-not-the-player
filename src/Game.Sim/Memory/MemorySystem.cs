@@ -1,4 +1,5 @@
 using Game.Sim.Entities;
+using Game.Sim.Locations;
 using Game.Sim.Perception;
 using Game.Sim.Time;
 using Game.Sim.World;
@@ -94,6 +95,18 @@ public sealed class MemorySystem
 
     public float GetRetainedConfidence(EntityId owner, MemoryId memoryId, SimTime now) =>
         _decayPolicy.CalculateRetainedConfidence(GetStore(owner).GetMemory(memoryId), now);
+
+    public LocationId? GetLastKnownLocation(EntityId owner, EntityId subject)
+    {
+        _ = _world.GetEntity(subject);
+        return GetStore(owner).Memories
+            .Where(memory => memory.Subject == subject && memory.Location is not null)
+            .OrderByDescending(memory => memory.EventTime)
+            .ThenByDescending(memory => memory.CreatedAt)
+            .ThenByDescending(memory => memory.Id.Value)
+            .Select(memory => memory.Location)
+            .FirstOrDefault();
+    }
 
     private static void ValidateUnitInterval(float value, string parameterName)
     {

@@ -94,5 +94,17 @@ public sealed class SuspicionSystem
             evaluated);
     }
 
+    public IReadOnlyList<SuspicionSnapshot> GetKnownSuspicions(
+        EntityId observer,
+        SimTime now)
+    {
+        _ = _memories.GetStore(observer);
+        return _cases.Keys
+            .Where(key => key.Observer == observer)
+            .OrderBy(key => key.Subject.Value, StringComparer.Ordinal)
+            .Select(key => GetSnapshot(observer, key.Subject, now))
+            .ToArray();
+    }
+
     private readonly record struct CaseKey(EntityId Observer, EntityId Subject);
 }
