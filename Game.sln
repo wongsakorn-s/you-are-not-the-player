@@ -1,4 +1,4 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -7,6 +7,10 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game.Sim.Tests", "tests\Game.Sim.Tests\Game.Sim.Tests.csproj", "{B192E3B5-EC16-4867-9F5E-88067F6DB710}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimRunner", "tools\SimRunner\SimRunner.csproj", "{C286C927-8205-46F7-A8CF-7A6163BF857D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{F30C2B0A-5785-45C8-B479-49C553F1325E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Game.Client.Godot", "src\Game.Client.Godot\Game.Client.Godot.csproj", "{BECA02B2-2B88-4634-A173-64FF4FF77238}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -26,5 +30,12 @@ Global
 		{C286C927-8205-46F7-A8CF-7A6163BF857D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C286C927-8205-46F7-A8CF-7A6163BF857D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C286C927-8205-46F7-A8CF-7A6163BF857D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BECA02B2-2B88-4634-A173-64FF4FF77238}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BECA02B2-2B88-4634-A173-64FF4FF77238}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BECA02B2-2B88-4634-A173-64FF4FF77238}.Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{BECA02B2-2B88-4634-A173-64FF4FF77238}.Release|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{BECA02B2-2B88-4634-A173-64FF4FF77238} = {F30C2B0A-5785-45C8-B479-49C553F1325E}
 	EndGlobalSection
 EndGlobal

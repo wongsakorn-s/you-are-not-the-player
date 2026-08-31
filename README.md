@@ -20,7 +20,9 @@ belief-driven goals สำหรับ observe/follow/ask/share/avoid,
 rule-based detector สำหรับ LootSweep/RepeatInteraction/RoleNeglect/BoundaryTesting,
 Player AI archetypes แบบ Explorer/Completionist/Roleplayer, headless SimRunner,
 information exchange ที่รักษา rumor lineage, autonomous suspicion feedback loop,
-และ GitHub Actions CI
+Godot 4.7.2 .NET adapter พร้อม Hotel slice 6 actors/5 locations, NavigationAgent3D,
+data-driven topology, restricted door, live movement lifecycle,
+requested/confirmed location tracking, debug HUD และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -28,11 +30,24 @@ information exchange ที่รักษา rumor lineage, autonomous suspicio
 dotnet restore Game.sln
 dotnet build Game.sln --configuration Release --no-restore
 dotnet test Game.sln --configuration Release --no-build
-dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
+dotnet run --project tools/SimRunner -- --scenario basement --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือย้าย Basement scenario เข้า headless SimRunner พร้อม structured trace/metrics
-จากนั้นเริ่ม Godot Adapter โดยให้ Game.Sim เป็น source of truth เช่นเดิม
+Basement scenario รันผ่าน headless SimRunner พร้อม structured summary, JSONL trace,
+metrics และ SHA-256 event fingerprint แล้ว Godot Adapter สามารถแปลง movement replay
+เป็น live request และ commit logical location หลัง NavigationAgent3D เดินถึงจริง
+
+เปิด Godot prototype:
+
+```bash
+godot --editor --path src/Game.Client.Godot
+```
+
+ตรวจ scene แบบ headless เมื่อมี Godot 4.7.2 .NET ใน PATH:
+
+```bash
+godot --headless --path src/Game.Client.Godot --quit-after 900
+```
 
 ---
 
@@ -1635,13 +1650,17 @@ final state hash เหมือนกัน
 
 # 20. SimRunner
 
+สถานะ: Basement scenario ใช้งานได้แล้วทั้ง structured summary, JSONL trace,
+metrics และ deterministic event fingerprint
+
 สร้าง console app:
 
 ```bash
 dotnet run --project tools/SimRunner \
-  --scenario hotel_day \
-  --seed 12345 \
-  --ticks 50000
+  --scenario basement \
+  --seed 481516 \
+  --ticks 10000 \
+  --trace logs/basement.jsonl
 ```
 
 Output:
@@ -1663,7 +1682,8 @@ Runtime: ...
 --repeat 1000
 ```
 
-เพื่อดู distribution โดยไม่เปิด Godot
+เพื่อดู distribution จาก seed ต่อเนื่องโดยไม่เปิด Godot ถ้าต้องการ trace หลายรอบ
+ให้ใช้ placeholder เช่น `--trace logs/basement-{run}.jsonl`
 
 นี่เป็นหนึ่งใน tool ที่มี ROI สูงที่สุดของโปรเจกต์
 
@@ -1777,6 +1797,9 @@ remove เมื่อ confidence ต่ำกว่า threshold
 # 24. Development Roadmap
 
 ## Phase 0 — Bootstrap
+
+สถานะ: เสร็จแล้ว — solution มี Game.Sim, tests, SimRunner และ Godot .NET project
+โดย client reference core ในทิศทางเดียว
 
 **เป้าหมาย:** repository และ deterministic core
 
@@ -1991,6 +2014,127 @@ if actor.IsPlayerAI
 ```
 
 ระบบต้อง detect จาก behavior เท่านั้น
+
+---
+
+## Phase 10 — Godot Adapter
+
+สถานะ: เสร็จแล้วสำหรับ prototype — Godot 4.7.2 .NET project reference Game.Sim,
+มี Hallway/Basement, restricted door และ actor view ที่แปลง logical location เป็น Vector3
+จาก event stream โดย Game.Sim ไม่ reference Godot
+
+DoD:
+
+```text
+Godot เปิด Main scene ได้
+แสดง actor movement จาก deterministic simulation
+Core simulation ยังรันและ test ได้โดยไม่เปิด Godot
+```
+
+---
+
+## Phase 11 — Developer Debug Visualization
+
+สถานะ: เสร็จแล้วสำหรับ MVP — มี seed/tick/speed, recent events, selected actor,
+memory counts, suspicion evidence และ hotkeys interaction/pause/step/speed/inspect/dump/replay
+
+```text
+E     interact ผ่าน InteractionCommand
+M     move selected actor ไปห้องถัดไปผ่าน live movement lifecycle
+F1    pause/resume
+Space step one tick
+F2    speed x2
+F3    speed x10
+Tab   inspect next actor
+F4    dump actor state
+F5    dump JSONL event trace
+R     replay
+```
+
+---
+
+## Phase 12 — Hotel Vertical Slice
+
+สถานะ: เสร็จแล้วสำหรับ interactive prototype visualization — scenario มี actor 6 ตัว,
+George ถูกขับด้วย Explorer Player AI ผ่าน action/pattern pipeline จริง และไม่มี Player flag
+ใน event ส่วน Anna/Bob ปิด memory/rumor/suspicion/follow feedback loop ครบ
+
+ขอบเขต slice ปัจจุบันคือ Hallway/Basement สองพื้นที่ และเชื่อม event replay กับ actor view แล้ว
+
+---
+
+## Phase 13 — Physical Navigation + Restricted Door
+
+สถานะ: เสร็จแล้วสำหรับ prototype — actor ทุกตัวใช้ `NavigationAgent3D` บน
+`NavigationRegion3D`, Basement ถูกกั้นด้วยประตูที่มี collision และ access gate,
+`BoundaryProbe` หรือปุ่ม `E` สามารถเปิดประตูได้
+
+Adapter แยก location เป็นสองสถานะ:
+
+```text
+requested location  = ปลายทางจาก deterministic event replay
+confirmed location  = ตำแหน่งที่ Godot ยืนยันหลัง actor เดินถึงจริง
+```
+
+DoD:
+
+```text
+NPC ไม่ teleport ระหว่าง Lobby/Basement
+NPC ไม่เริ่มเดินเข้า Basement ขณะประตูปิด
+HUD แสดง moving จน NavigationAgent3D ถึงปลายทาง
+reset ปิดประตูและคืนตำแหน่ง actor ได้
+Godot headless smoke test ไม่มี runtime error
+```
+
+หมายเหตุ: requested/confirmed location tracker เป็น presentation state ส่วน Phase 14
+เพิ่ม live logical world และ core action completion แยกจาก state ชุดนี้แล้ว
+
+---
+
+## Phase 14 — Hotel Topology + Live Action Handshake
+
+สถานะ: เสร็จแล้วสำหรับ prototype — เพิ่ม pure C# `LocationGraph` และ
+`LiveMovementCoordinator` พร้อม lifecycle `Requested → Navigating → Completed/Failed`;
+Godot ส่ง arrival/path failure acknowledgement กลับมาให้ core และ `MoveEntityActionHandler`
+สร้าง `LeaveLocation`/`EnterLocation` หลัง arrival เท่านั้น
+
+- Lobby, Hallway, Kitchen, Room 201 และ Basement มาจาก `hotel-world.json`
+- marker, floor, navigation bounds, portal และ restricted door เป็น data-driven
+- route planner ใช้ stable breadth-first search และไม่พึ่งพิกัด Godot
+- รองรับ access denied, route unavailable, physical path failure, cancel และ replan
+- event ID ของ live movement และ input ใช้ deterministic generator ร่วมกัน
+
+DoD:
+
+```text
+action หนึ่งรายการมี lifecycle Requested → Navigating → Completed/Failed
+logical location เปลี่ยนเพียงครั้งเดียวหลัง arrival acknowledgement
+เส้นทางข้ามหลายห้องและประตู replay ซ้ำได้จาก seed เดิม
+```
+
+ขอบเขตปัจจุบัน: behavior scenario ยังถูกคำนวณล่วงหน้า แล้ว Godot bridge แปลง
+movement event เป็น live request อีกชั้นหนึ่ง ขั้นถัดไปคือให้ simulation session
+ตัดสินใจและรอ action completion แบบ real-time โดยไม่ต้อง precompute movement event
+
+---
+
+## Phase 15 — Real-time Simulation Session
+
+สถานะ: ขั้นถัดไป
+
+- เปลี่ยน Basement scenario จาก one-shot `Run()` เป็น session ที่ tick เพิ่มทีละขั้น
+- ให้ NPC Brain ส่ง movement request ตรงเข้า `LiveMovementCoordinator`
+- actor ที่กำลังเดินต้องมี busy state และไม่เลือก movement goal ซ้อนโดยไม่ตั้งใจ
+- ส่ง committed world events เข้า perception/memory/suspicion pipeline ใน tick ถัดไป
+- รักษา pause, step, speed, reset และ deterministic replay เดิม
+
+DoD:
+
+```text
+ไม่มี precomputed EnterLocation event สำหรับ movement ที่ Godot กำลังแสดง
+NPC decision รอ Completed/Failed ก่อนวางแผน action ถัดไป
+headless session และ Godot session ให้ผล logical event stream ตรงกันเมื่อใช้ acknowledgement ชุดเดียวกัน
+```
 
 ---
 
@@ -2233,55 +2377,32 @@ async ใช้ได้ใน:
 
 Foundation ถือว่าพร้อมเมื่อ:
 
-- [ ] Core simulation ไม่มี dependency ต่อ Godot
-- [ ] ทุก random ผ่าน seeded RNG
-- [ ] Event immutable
-- [ ] World truth แยกจาก observation
-- [ ] Observation แยกจาก memory
-- [ ] Direct memory แยกจาก social memory
-- [ ] Rumor trace ถึง root event ได้
-- [ ] Suspicion derived จาก evidence
-- [ ] ทุก suspicion score explain ได้
-- [ ] Headless Basement Test ผ่าน
-- [ ] Determinism test ผ่าน
-- [ ] SimRunner รันหลายร้อยรอบได้
-- [ ] Godot adapter สามารถแสดงผล simulation ได้
-- [ ] ยังไม่มี gameplay system ที่ต้องพึ่ง UI ใหญ่
+- [x] Core simulation ไม่มี dependency ต่อ Godot
+- [x] ทุก random ผ่าน seeded RNG
+- [x] Event immutable
+- [x] World truth แยกจาก observation
+- [x] Observation แยกจาก memory
+- [x] Direct memory แยกจาก social memory
+- [x] Rumor trace ถึง root event ได้
+- [x] Suspicion derived จาก evidence
+- [x] ทุก suspicion score explain ได้
+- [x] Headless Basement Test ผ่าน
+- [x] Determinism test ผ่าน
+- [x] SimRunner รัน 10,000 ticks ได้
+- [x] SimRunner รันหลายร้อยรอบได้
+- [x] Godot adapter สามารถแสดงผล simulation ได้
+- [x] Live movement commit logical location หลัง physical arrival
+- [x] Hotel topology/marker/portal/door เป็น data-driven
+- [x] ยังไม่มี gameplay system ที่ต้องพึ่ง UI ใหญ่
 
 ---
 
 # 31. Recommended Immediate Goal
 
-อย่าเริ่มจากโรงแรมเต็มรูปแบบ
+สถานะ: Hotel Topology + Live Action Handshake เสร็จแล้ว
 
-สร้าง `Game.Sim` ให้ผ่าน:
-
-```text
-The Basement Test
-```
-
-ก่อน
-
-จากนั้นสร้าง Godot scene ง่ายที่สุด:
-
-```text
-Hallway
-Basement
-3 capsule NPCs
-1 door
-```
-
-เชื่อม scene เข้ากับ simulation ที่ผ่าน test แล้ว
-
-เมื่อระบบ logical ทำงานถูก:
-
-```text
-Simulation
-    ↓
-Godot Visualization
-```
-
-จะง่ายกว่าการสร้าง AI logic อยู่ใน SceneTree ตั้งแต่วันแรกมาก
+เป้าหมายถัดไปคือ Phase 15: ทำ real-time simulation session เพื่อให้ NPC Brain
+ส่ง action เข้า live movement lifecycle โดยตรง แทนการแปลงจาก precomputed event replay
 
 ---
 

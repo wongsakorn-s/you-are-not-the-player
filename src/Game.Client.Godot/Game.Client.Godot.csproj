@@ -1,0 +1,22 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>Game.Client.Godot</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Game.Sim\Game.Sim.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Game.Content\Data\Hotel\hotel-world.json">
+      <Link>Data\Hotel\hotel-world.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Game.Content\Data\SuspicionRules\mvp.json">
+      <Link>Data\SuspicionRules\mvp.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

@@ -15,6 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Game.Client.Godot\Game.Client.Godot.csproj" />
     <ProjectReference Include="..\..\src\Game.Sim\Game.Sim.csproj" />
   </ItemGroup>
 

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "navigation": {
+    "minimumX": -7.5,
+    "maximumX": 7.5,
+    "minimumZ": -8.0,
+    "maximumZ": 9.0,
+    "height": 0.8
+  },
+  "locations": [
+    {
+      "id": "lobby",
+      "displayName": "HOTEL LOBBY",
+      "marker": { "x": 0.0, "y": 0.8, "z": 6.0 },
+      "floorPosition": { "x": 0.0, "y": -0.2, "z": 6.0 },
+      "floorSize": { "x": 10.0, "y": 0.35, "z": 5.0 },
+      "color": "29384f",
+      "restricted": false
+    },
+    {
+      "id": "hallway",
+      "displayName": "MAIN HALLWAY",
+      "marker": { "x": 0.0, "y": 0.8, "z": 2.0 },
+      "floorPosition": { "x": 0.0, "y": -0.2, "z": 1.5 },
+      "floorSize": { "x": 5.0, "y": 0.35, "z": 4.0 },
+      "color": "34465e",
+      "restricted": false
+    },
+    {
+      "id": "kitchen",
+      "displayName": "KITCHEN",
+      "marker": { "x": -5.0, "y": 0.8, "z": 2.0 },
+      "floorPosition": { "x": -5.0, "y": -0.2, "z": 2.0 },
+      "floorSize": { "x": 5.0, "y": 0.35, "z": 5.0 },
+      "color": "354f47",
+      "restricted": false
+    },
+    {
+      "id": "room-201",
+      "displayName": "ROOM 201",
+      "marker": { "x": 5.0, "y": 0.8, "z": 2.0 },
+      "floorPosition": { "x": 5.0, "y": -0.2, "z": 2.0 },
+      "floorSize": { "x": 5.0, "y": 0.35, "z": 5.0 },
+      "color": "4a4058",
+      "restricted": false
+    },
+    {
+      "id": "basement",
+      "displayName": "RESTRICTED BASEMENT",
+      "marker": { "x": 0.0, "y": 0.8, "z": -5.0 },
+      "floorPosition": { "x": 0.0, "y": -0.2, "z": -5.0 },
+      "floorSize": { "x": 10.0, "y": 0.35, "z": 6.0 },
+      "color": "412f3f",
+      "restricted": true
+    }
+  ],
+  "portals": [
+    {
+      "id": "lobby-arch",
+      "from": "lobby",
+      "to": "hallway",
+      "requiresAccess": false
+    },
+    {
+      "id": "kitchen-door",
+      "from": "hallway",
+      "to": "kitchen",
+      "requiresAccess": false
+    },
+    {
+      "id": "room-201-door",
+      "from": "hallway",
+      "to": "room-201",
+      "requiresAccess": false
+    },
+    {
+      "id": "basement-door",
+      "from": "hallway",
+      "to": "basement",
+      "requiresAccess": true,
+      "door": {
+        "position": { "x": 0.0, "y": 1.15, "z": -1.0 },
+        "size": { "x": 2.2, "y": 2.7, "z": 0.35 },
+        "color": "a44747"
+      }
+    }
+  ]
+}
