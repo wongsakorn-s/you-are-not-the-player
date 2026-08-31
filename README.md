@@ -8,7 +8,7 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง Behavior Pattern Detector foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0 ถึง Player AI Prototype foundation เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
 atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
@@ -18,7 +18,8 @@ EvidenceContribution, SuspicionVector, daily Schedule, Needs, role permissions,
 deterministic Utility-based NPC Brain, Secret Plan สำหรับ theft/secret meeting/night owl,
 belief-driven goals สำหรับ observe/follow/ask/share/avoid,
 rule-based detector สำหรับ LootSweep/RepeatInteraction/RoleNeglect/BoundaryTesting,
-headless SimRunner และ GitHub Actions CI
+Player AI archetypes แบบ Explorer/Completionist/Roleplayer, headless SimRunner
+และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -29,8 +30,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือ Phase 9: Player AI Prototype โดยสร้าง Explorer, Completionist
-และ Roleplayer ให้ใช้ action/event system เดียวกับ NPC ปกติ
+เป้าหมายถัดไปคือ Milestone สำคัญที่สุด: The Basement Test เพื่อพิสูจน์
+feedback loop ตั้งแต่ event → memory → suspicion → rumor → behavior แบบไม่ script
 
 ---
 
@@ -1967,6 +1968,9 @@ pattern ถูก detect จาก event stream
 ---
 
 ## Phase 9 — Player AI Prototype
+
+สถานะ: เสร็จแล้ว — ทั้ง 3 archetype ใช้ routine, movement, interaction,
+boundary-probe และ pattern pipeline เดียวกับ actor ปกติ โดย event ไม่มี Player flag
 
 สร้าง archetypes แรก:
 

@@ -16,4 +16,6 @@ public enum GoalType
     AskAboutTarget = 12,
     ShareSuspicion = 13,
     AvoidTarget = 14,
+    ExploreBoundary = 15,
+    CompleteInteraction = 16,
 }
