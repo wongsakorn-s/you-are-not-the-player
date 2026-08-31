@@ -80,4 +80,29 @@ public sealed class JsonlWorldEventLoggerTests
             "\"pattern\":\"LootSweep\",\"evidenceEvents\":[3,9]}}\n";
         Assert.Equal(expected, output.ToString());
     }
+
+    [Fact]
+    public void Write_SerializesInformationExchangeLineage()
+    {
+        using var output = new StringWriter(CultureInfo.InvariantCulture);
+        var logger = new JsonlWorldEventLogger(output);
+        var worldEvent = new WorldEvent(
+            new EventId(13),
+            new SimTime(21),
+            George,
+            EventType.ShareInformation,
+            Lobby,
+            target: new EntityId("bob"),
+            tags: [EventTag.Audible],
+            payload: new InformationExchangePayload(George, new EventId(7)));
+
+        logger.Write(worldEvent);
+
+        const string expected =
+            "{\"schemaVersion\":1,\"id\":13,\"tick\":21,\"type\":\"ShareInformation\"," +
+            "\"actor\":\"george\",\"target\":\"bob\",\"location\":\"lobby\"," +
+            "\"tags\":[\"Audible\"],\"payload\":{\"type\":\"informationExchange\"," +
+            "\"subject\":\"george\",\"rootEventId\":7}}\n";
+        Assert.Equal(expected, output.ToString());
+    }
 }

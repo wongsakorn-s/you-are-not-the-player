@@ -72,7 +72,12 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
 
             if (contact is not null)
             {
-                AddSocialGoals(goals, snapshot.Subject, contact, concern);
+                AddSocialGoals(
+                    goals,
+                    context.Entity.Id,
+                    snapshot,
+                    contact,
+                    concern);
             }
 
             if (snapshot.Vector.Criminality >= _policy.AvoidCriminalityThreshold)
@@ -135,29 +140,47 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
 
     private void AddSocialGoals(
         List<GoalCandidate> goals,
-        EntityId subject,
+        EntityId observer,
+        SuspicionSnapshot snapshot,
         ContactBelief contact,
         float concern)
     {
-        if (concern >= _policy.AskThreshold)
+        if (contact.Entity == snapshot.Subject)
+        {
+            return;
+        }
+
+        MemoryStore observerStore = _memories.GetStore(observer);
+        MemoryStore contactStore = _memories.GetStore(contact.Entity);
+        bool canAsk = contactStore.Memories.Any(memory =>
+            memory.Subject == snapshot.Subject &&
+            !observerStore.KnowsRootEvent(memory.RootEventId));
+        bool canShare = snapshot.Evidence.Any(evidence =>
+        {
+            MemoryRecord sourceMemory = observerStore.GetMemory(
+                evidence.Contribution.SourceMemory);
+            return !contactStore.KnowsRootEvent(sourceMemory.RootEventId);
+        });
+
+        if (canAsk && concern >= _policy.AskThreshold)
         {
             goals.Add(CreateGoal(
                 GoalType.AskAboutTarget,
                 contact.Location,
                 AskBaseUtility,
                 concern,
-                subject,
+                snapshot.Subject,
                 contact.Entity));
         }
 
-        if (concern >= _policy.ShareThreshold)
+        if (canShare && concern >= _policy.ShareThreshold)
         {
             goals.Add(CreateGoal(
                 GoalType.ShareSuspicion,
                 contact.Location,
                 ShareBaseUtility,
                 concern,
-                subject,
+                snapshot.Subject,
                 contact.Entity));
         }
     }
@@ -175,7 +198,9 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
             baseUtility,
             [new UtilityReason("belief:suspicion", beliefWeight)],
             ignoresRolePermissions: false,
-            CreateIntentId(type, subject, contact));
+            CreateIntentId(type, subject, contact),
+            target: subject,
+            interactionPartner: contact);
 
     private static string CreateIntentId(
         GoalType type,

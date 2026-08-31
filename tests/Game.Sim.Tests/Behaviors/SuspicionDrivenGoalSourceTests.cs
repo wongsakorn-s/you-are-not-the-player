@@ -136,6 +136,13 @@ public sealed class SuspicionDrivenGoalSourceTests
             ContactLocation,
             new EventId(2),
             [EventTag.Visible]);
+        _ = Remember(
+            memories,
+            Charlie,
+            George,
+            RememberedLocation,
+            new EventId(3),
+            [EventTag.Visible]);
 
         var beliefRule = new SuspicionRule(
             "dangerous_restricted_entry",

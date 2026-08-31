@@ -8,7 +8,7 @@
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง Player AI Prototype foundation เสร็จแล้ว โดยมี Pure C# simulation,
+Milestone 0 ถึง The Basement Test เสร็จแล้ว โดยมี Pure C# simulation,
 deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
 Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
 atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
@@ -18,7 +18,8 @@ EvidenceContribution, SuspicionVector, daily Schedule, Needs, role permissions,
 deterministic Utility-based NPC Brain, Secret Plan สำหรับ theft/secret meeting/night owl,
 belief-driven goals สำหรับ observe/follow/ask/share/avoid,
 rule-based detector สำหรับ LootSweep/RepeatInteraction/RoleNeglect/BoundaryTesting,
-Player AI archetypes แบบ Explorer/Completionist/Roleplayer, headless SimRunner
+Player AI archetypes แบบ Explorer/Completionist/Roleplayer, headless SimRunner,
+information exchange ที่รักษา rumor lineage, autonomous suspicion feedback loop,
 และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
@@ -30,8 +31,8 @@ dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --seed 481516 --ticks 16
 ```
 
-เป้าหมายถัดไปคือ Milestone สำคัญที่สุด: The Basement Test เพื่อพิสูจน์
-feedback loop ตั้งแต่ event → memory → suspicion → rumor → behavior แบบไม่ script
+เป้าหมายถัดไปคือย้าย Basement scenario เข้า headless SimRunner พร้อม structured trace/metrics
+จากนั้นเริ่ม Godot Adapter โดยให้ Game.Sim เป็น source of truth เช่นเดิม
 
 ---
 
@@ -1994,6 +1995,9 @@ if actor.IsPlayerAI
 ---
 
 # 25. Milestone สำคัญที่สุด — The Basement Test
+
+สถานะ: ผ่านแล้ว — automated integration test ปิด feedback loop ครบตั้งแต่ George
+เข้า Basement จน Bob ได้ social memory, สงสัย และเลือก Follow โดยไม่มี scripted quest
 
 ก่อนสร้าง hotel จริง ต้องผ่าน scenario นี้:
 

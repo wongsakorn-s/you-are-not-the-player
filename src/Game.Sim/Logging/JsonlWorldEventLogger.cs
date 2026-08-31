@@ -105,6 +105,11 @@ public sealed class JsonlWorldEventLogger : IWorldEventLogger
 
                 json.WriteEndArray();
                 break;
+            case InformationExchangePayload information:
+                json.WriteString("type", "informationExchange");
+                json.WriteString("subject", information.Subject.Value);
+                json.WriteNumber("rootEventId", information.RootEventId.Value);
+                break;
             default:
                 throw new NotSupportedException(
                     $"Payload type '{payload.GetType().Name}' is not supported by the JSONL logger.");

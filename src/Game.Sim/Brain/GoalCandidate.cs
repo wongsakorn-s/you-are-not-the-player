@@ -1,3 +1,4 @@
+using Game.Sim.Entities;
 using Game.Sim.Locations;
 
 namespace Game.Sim.Brain;
@@ -10,7 +11,9 @@ public sealed class GoalCandidate
         float baseUtility,
         IEnumerable<UtilityReason>? reasons = null,
         bool ignoresRolePermissions = false,
-        string? intentId = null)
+        string? intentId = null,
+        EntityId? target = null,
+        EntityId? interactionPartner = null)
     {
         if (!Enum.IsDefined(type))
         {
@@ -35,6 +38,18 @@ public sealed class GoalCandidate
             throw new ArgumentException("Goal intent ID cannot be blank.", nameof(intentId));
         }
 
+        if (target is { IsEmpty: true })
+        {
+            throw new ArgumentException("Goal target cannot be empty.", nameof(target));
+        }
+
+        if (interactionPartner is { IsEmpty: true })
+        {
+            throw new ArgumentException(
+                "Goal interaction partner cannot be empty.",
+                nameof(interactionPartner));
+        }
+
         UtilityReason[] materializedReasons = reasons?.ToArray() ?? [];
         float totalUtility = baseUtility + materializedReasons.Sum(reason => reason.Weight);
         if (!float.IsFinite(totalUtility))
@@ -51,6 +66,8 @@ public sealed class GoalCandidate
         TotalUtility = totalUtility;
         IgnoresRolePermissions = ignoresRolePermissions;
         IntentId = intentId?.Trim();
+        Target = target;
+        InteractionPartner = interactionPartner;
     }
 
     public GoalType Type { get; }
@@ -66,4 +83,8 @@ public sealed class GoalCandidate
     public bool IgnoresRolePermissions { get; }
 
     public string? IntentId { get; }
+
+    public EntityId? Target { get; }
+
+    public EntityId? InteractionPartner { get; }
 }

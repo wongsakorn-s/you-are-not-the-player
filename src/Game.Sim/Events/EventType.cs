@@ -11,4 +11,6 @@ public enum EventType
     RoleDutyMissed = 7,
     BoundaryProbe = 8,
     BehaviorPattern = 9,
+    ShareInformation = 10,
+    AskInformation = 11,
 }

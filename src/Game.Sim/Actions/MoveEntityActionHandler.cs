@@ -11,6 +11,11 @@ public sealed class MoveEntityActionHandler
         EventTag.Movement,
         EventTag.Visible,
     ];
+    private static readonly EventTag[] RestrictedMovementTags = [
+        EventTag.Movement,
+        EventTag.Visible,
+        EventTag.Restricted,
+    ];
 
     private readonly WorldState _world;
     private readonly WorldEventFactory _events;
@@ -34,7 +39,7 @@ public sealed class MoveEntityActionHandler
         ArgumentNullException.ThrowIfNull(command);
 
         EntityState actor = _world.GetEntity(command.Actor);
-        _ = _world.GetLocation(command.Destination);
+        LocationState destinationState = _world.GetLocation(command.Destination);
         LocationId origin = actor.LogicalLocation;
 
         if (origin == command.Destination)
@@ -43,17 +48,23 @@ public sealed class MoveEntityActionHandler
         }
 
         var payload = new LocationTransitionPayload(origin, command.Destination);
+        EventTag[] leaveTags = _world.GetLocation(origin).IsRestricted
+            ? RestrictedMovementTags
+            : MovementTags;
+        EventTag[] enterTags = destinationState.IsRestricted
+            ? RestrictedMovementTags
+            : MovementTags;
         WorldEvent leaveEvent = _events.Create(
             command.Actor,
             EventType.LeaveLocation,
             origin,
-            tags: MovementTags,
+            tags: leaveTags,
             payload: payload);
         WorldEvent enterEvent = _events.Create(
             command.Actor,
             EventType.EnterLocation,
             command.Destination,
-            tags: MovementTags,
+            tags: enterTags,
             payload: payload);
 
         _eventBuffer.PublishBatch([leaveEvent, enterEvent]);

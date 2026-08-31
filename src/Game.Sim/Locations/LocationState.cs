@@ -2,7 +2,7 @@ namespace Game.Sim.Locations;
 
 public sealed class LocationState
 {
-    public LocationState(LocationId id)
+    public LocationState(LocationId id, bool isRestricted = false)
     {
         if (id.IsEmpty)
         {
@@ -10,7 +10,10 @@ public sealed class LocationState
         }
 
         Id = id;
+        IsRestricted = isRestricted;
     }
 
     public LocationId Id { get; }
+
+    public bool IsRestricted { get; }
 }

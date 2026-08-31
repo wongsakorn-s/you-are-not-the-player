@@ -71,6 +71,25 @@ public sealed class MoveEntityActionHandlerTests
         Assert.Equal(0, buffer.Count);
     }
 
+    [Fact]
+    public void Execute_EnteringRestrictedLocationTagsOnlyDestinationEvent()
+    {
+        var world = new WorldState();
+        world.AddLocation(new LocationState(Lobby));
+        world.AddLocation(new LocationState(Basement, isRestricted: true));
+        world.AddEntity(new EntityState(George, Lobby));
+        var clock = new SimClock();
+        var buffer = new WorldEventBuffer();
+        var factory = new WorldEventFactory(clock, new SequentialEventIdGenerator());
+        var handler = new MoveEntityActionHandler(world, factory, buffer);
+
+        _ = handler.Execute(new MoveEntityCommand(George, Basement));
+        IReadOnlyList<WorldEvent> events = buffer.Drain();
+
+        Assert.DoesNotContain(EventTag.Restricted, events[0].Tags);
+        Assert.Contains(EventTag.Restricted, events[1].Tags);
+    }
+
     private static (
         WorldState World,
         SimClock Clock,

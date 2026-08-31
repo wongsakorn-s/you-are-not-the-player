@@ -1,3 +1,4 @@
+using Game.Sim.Entities;
 using Game.Sim.Locations;
 
 namespace Game.Sim.Events;
@@ -123,4 +124,27 @@ public sealed record BehaviorPatternPayload : EventPayload
     public BehaviorPatternKind Pattern { get; }
 
     public IReadOnlyList<EventId> EvidenceEvents { get; }
+}
+
+public sealed record InformationExchangePayload : EventPayload
+{
+    public InformationExchangePayload(EntityId subject, EventId rootEventId)
+    {
+        if (subject.IsEmpty)
+        {
+            throw new ArgumentException("Information subject cannot be empty.", nameof(subject));
+        }
+
+        if (rootEventId.IsEmpty)
+        {
+            throw new ArgumentException("Information root event cannot be empty.", nameof(rootEventId));
+        }
+
+        Subject = subject;
+        RootEventId = rootEventId;
+    }
+
+    public EntityId Subject { get; }
+
+    public EventId RootEventId { get; }
 }
