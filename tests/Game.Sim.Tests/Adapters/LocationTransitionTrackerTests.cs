@@ -51,4 +51,17 @@ public sealed class LocationTransitionTrackerTests
 
         Assert.Contains("not been initialized", error.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void CancelRequest_RestoresRequestedLocationToLastConfirmation()
+    {
+        var tracker = new LocationTransitionTracker();
+        tracker.Initialize(Anna, Lobby);
+        tracker.Request(Anna, Basement);
+
+        tracker.CancelRequest(Anna);
+
+        Assert.Equal(Lobby, tracker.GetRequestedLocation(Anna));
+        Assert.False(tracker.IsInTransit(Anna));
+    }
 }

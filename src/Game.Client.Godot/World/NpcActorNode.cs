@@ -5,7 +5,7 @@ namespace Game.Client.Godot.World;
 public sealed partial class NpcActorNode : Node3D
 {
     private const float ArrivalDistance = 0.16f;
-    private const float MovementSpeed = 3.6f;
+    private const float BaseMovementSpeed = 3.6f;
 
     private NavigationAgent3D? _navigationAgent;
     private Vector3 _destination;
@@ -19,6 +19,10 @@ public sealed partial class NpcActorNode : Node3D
     public bool IsNavigating { get; private set; }
 
     public Vector3 Destination => _destination;
+
+    public bool IsMovementPaused { get; private set; }
+
+    public float SpeedMultiplier { get; private set; } = 1.0f;
 
     public void Initialize(string actorId, Color color)
     {
@@ -64,7 +68,7 @@ public sealed partial class NpcActorNode : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
-        if (!IsNavigating || _navigationAgent is null)
+        if (!IsNavigating || IsMovementPaused || _navigationAgent is null)
         {
             return;
         }
@@ -97,7 +101,9 @@ public sealed partial class NpcActorNode : Node3D
             return;
         }
 
-        float step = MathF.Min(MovementSpeed * (float)delta, remaining.Length());
+        float step = MathF.Min(
+            BaseMovementSpeed * SpeedMultiplier * (float)delta,
+            remaining.Length());
         GlobalPosition += direction.Normalized() * step;
     }
 
@@ -130,6 +136,21 @@ public sealed partial class NpcActorNode : Node3D
             _navigationAgent.TargetPosition = GlobalPosition;
             _navigationAgent.SetVelocityForced(Vector3.Zero);
         }
+    }
+
+    public void SetMovementPaused(bool isPaused) => IsMovementPaused = isPaused;
+
+    public void SetSpeedMultiplier(float multiplier)
+    {
+        if (!float.IsFinite(multiplier) || multiplier <= 0.0f)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(multiplier),
+                multiplier,
+                "Movement speed multiplier must be positive.");
+        }
+
+        SpeedMultiplier = multiplier;
     }
 
     private void CompleteNavigation()

@@ -10,15 +10,31 @@ public sealed class NpcRoutineSystem
 {
     private readonly SimClock _clock;
     private readonly WorldState _world;
-    private readonly MoveEntityActionHandler _movement;
+    private readonly INpcMovementExecutor _movement;
     private readonly UtilityNpcBrain _brain;
     private readonly IReadOnlyList<INpcRoutineDecisionObserver> _observers;
     private readonly Dictionary<EntityId, NpcRoutineProfile> _profiles = [];
+    private readonly Dictionary<EntityId, PendingDecision> _pendingDecisions = [];
 
     public NpcRoutineSystem(
         SimClock clock,
         WorldState world,
         MoveEntityActionHandler movement,
+        UtilityNpcBrain brain,
+        IEnumerable<INpcRoutineDecisionObserver>? observers = null)
+        : this(
+            clock,
+            world,
+            new ImmediateNpcMovementExecutor(movement),
+            brain,
+            observers)
+    {
+    }
+
+    public NpcRoutineSystem(
+        SimClock clock,
+        WorldState world,
+        INpcMovementExecutor movement,
         UtilityNpcBrain brain,
         IEnumerable<INpcRoutineDecisionObserver>? observers = null)
     {
@@ -38,6 +54,8 @@ public sealed class NpcRoutineSystem
 
         _observers = Array.AsReadOnly(materializedObservers);
     }
+
+    public bool HasPendingMovement(EntityId actor) => _pendingDecisions.ContainsKey(actor);
 
     public void Register(NpcRoutineProfile profile)
     {
@@ -65,6 +83,11 @@ public sealed class NpcRoutineSystem
             .OrderBy(profile => profile.Entity.Value, StringComparer.Ordinal))
         {
             profile.Needs.Advance(delta, _clock.TicksPerSecond, profile.NeedProfile.GrowthRates);
+            if (_movement.IsBusy(profile.Entity))
+            {
+                continue;
+            }
+
             EntityState entity = _world.GetEntity(profile.Entity);
             var context = new NpcDecisionContext(entity, profile, _clock.TimeOfDay);
             GoalCandidate goal = _brain.SelectGoal(context);
@@ -75,17 +98,26 @@ public sealed class NpcRoutineSystem
                     $"Goal '{goal.Type}' selected forbidden location '{goal.Destination}'.");
             }
 
-            bool moved = entity.LogicalLocation != goal.Destination &&
-                _movement.Execute(new MoveEntityCommand(entity.Id, goal.Destination));
-            if (entity.LogicalLocation == goal.Destination)
+            NpcMovementExecution execution = entity.LogicalLocation == goal.Destination
+                ? new NpcMovementExecution(NpcMovementExecutionStatus.NoMovement)
+                : _movement.Execute(new MoveEntityCommand(entity.Id, goal.Destination));
+            bool moved = execution.Status is
+                NpcMovementExecutionStatus.Completed or NpcMovementExecutionStatus.Pending;
+            bool actionCompleted = execution.Status is
+                NpcMovementExecutionStatus.NoMovement or NpcMovementExecutionStatus.Completed;
+            if (actionCompleted && entity.LogicalLocation == goal.Destination)
             {
                 profile.ApplyRecovery(goal.Type, delta, _clock.TicksPerSecond);
             }
 
             var decision = new NpcRoutineDecision(_clock.Now, entity.Id, goal, moved);
-            foreach (INpcRoutineDecisionObserver observer in _observers)
+            if (execution.Status == NpcMovementExecutionStatus.Pending)
             {
-                observer.Observe(decision);
+                _pendingDecisions.Add(entity.Id, new PendingDecision(decision, delta));
+            }
+            else if (actionCompleted)
+            {
+                NotifyObservers(decision);
             }
 
             decisions.Add(decision);
@@ -93,4 +125,44 @@ public sealed class NpcRoutineSystem
 
         return decisions;
     }
+
+    public void AcknowledgeMovementCompleted(EntityId actor)
+    {
+        if (!_pendingDecisions.Remove(actor, out PendingDecision? pending))
+        {
+            throw new InvalidOperationException($"Entity '{actor}' has no pending routine movement.");
+        }
+
+        EntityState entity = _world.GetEntity(actor);
+        if (entity.LogicalLocation != pending.Decision.Goal.Destination)
+        {
+            throw new InvalidOperationException(
+                $"Entity '{actor}' did not arrive at '{pending.Decision.Goal.Destination}'.");
+        }
+
+        NpcRoutineProfile profile = _profiles[actor];
+        profile.ApplyRecovery(
+            pending.Decision.Goal.Type,
+            pending.Delta,
+            _clock.TicksPerSecond);
+        NotifyObservers(pending.Decision with { Time = _clock.Now });
+    }
+
+    public void AcknowledgeMovementFailed(EntityId actor)
+    {
+        if (!_pendingDecisions.Remove(actor))
+        {
+            throw new InvalidOperationException($"Entity '{actor}' has no pending routine movement.");
+        }
+    }
+
+    private void NotifyObservers(NpcRoutineDecision decision)
+    {
+        foreach (INpcRoutineDecisionObserver observer in _observers)
+        {
+            observer.Observe(decision);
+        }
+    }
+
+    private sealed record PendingDecision(NpcRoutineDecision Decision, SimDelta Delta);
 }

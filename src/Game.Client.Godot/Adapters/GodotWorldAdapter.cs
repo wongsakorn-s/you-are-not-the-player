@@ -130,6 +130,33 @@ public sealed class GodotWorldAdapter
     public LocationId GetRequestedLocation(EntityId actor) =>
         _transitions.GetRequestedLocation(actor);
 
+    public void CancelMove(EntityId actor)
+    {
+        if (!_actorViews.TryGetValue(actor, out NpcActorNode? view))
+        {
+            throw new InvalidOperationException($"Actor view '{actor}' is not registered.");
+        }
+
+        view.Stop();
+        _transitions.CancelRequest(actor);
+    }
+
+    public void SetMovementPaused(bool isPaused)
+    {
+        foreach (NpcActorNode view in _actorViews.Values)
+        {
+            view.SetMovementPaused(isPaused);
+        }
+    }
+
+    public void SetMovementSpeed(float multiplier)
+    {
+        foreach (NpcActorNode view in _actorViews.Values)
+        {
+            view.SetSpeedMultiplier(multiplier);
+        }
+    }
+
     private bool IsAccessBlocked(LocationId location) =>
         _restrictedLocations.Contains(location) && !_accessibleLocations.Contains(location);
 

@@ -22,7 +22,8 @@ Player AI archetypes แบบ Explorer/Completionist/Roleplayer, headless SimRu
 information exchange ที่รักษา rumor lineage, autonomous suspicion feedback loop,
 Godot 4.7.2 .NET adapter พร้อม Hotel slice 6 actors/5 locations, NavigationAgent3D,
 data-driven topology, restricted door, live movement lifecycle,
-requested/confirmed location tracking, debug HUD และ GitHub Actions CI
+incremental real-time simulation session, requested/confirmed location tracking,
+debug HUD และ GitHub Actions CI
 
 คำสั่งตรวจสอบระบบ:
 
@@ -34,8 +35,8 @@ dotnet run --project tools/SimRunner -- --scenario basement --seed 481516 --tick
 ```
 
 Basement scenario รันผ่าน headless SimRunner พร้อม structured summary, JSONL trace,
-metrics และ SHA-256 event fingerprint แล้ว Godot Adapter สามารถแปลง movement replay
-เป็น live request และ commit logical location หลัง NavigationAgent3D เดินถึงจริง
+metrics และ SHA-256 event fingerprint ส่วน Godot รัน NPC Brain/session ทีละ tick โดยตรง
+และ commit logical location หลัง NavigationAgent3D เดินถึงจริง ไม่มี precomputed movement replay
 
 เปิด Godot prototype:
 
@@ -46,7 +47,7 @@ godot --editor --path src/Game.Client.Godot
 ตรวจ scene แบบ headless เมื่อมี Godot 4.7.2 .NET ใน PATH:
 
 ```bash
-godot --headless --path src/Game.Client.Godot --quit-after 900
+godot --headless --path src/Game.Client.Godot --quit-after 2600
 ```
 
 ---
@@ -2040,7 +2041,6 @@ memory counts, suspicion evidence และ hotkeys interaction/pause/step/speed
 
 ```text
 E     interact ผ่าน InteractionCommand
-M     move selected actor ไปห้องถัดไปผ่าน live movement lifecycle
 F1    pause/resume
 Space step one tick
 F2    speed x2
@@ -2048,7 +2048,7 @@ F3    speed x10
 Tab   inspect next actor
 F4    dump actor state
 F5    dump JSONL event trace
-R     replay
+R     reset real-time session
 ```
 
 ---
@@ -2059,7 +2059,8 @@ R     replay
 George ถูกขับด้วย Explorer Player AI ผ่าน action/pattern pipeline จริง และไม่มี Player flag
 ใน event ส่วน Anna/Bob ปิด memory/rumor/suspicion/follow feedback loop ครบ
 
-ขอบเขต slice ปัจจุบันคือ Hallway/Basement สองพื้นที่ และเชื่อม event replay กับ actor view แล้ว
+Hotel scene มี 5 locations ส่วน Basement feedback loop ใช้ Lobby/Hallway/Basement
+และเชื่อม NPC decision เข้ากับ actor view แล้ว
 
 ---
 
@@ -2072,7 +2073,7 @@ George ถูกขับด้วย Explorer Player AI ผ่าน action/pat
 Adapter แยก location เป็นสองสถานะ:
 
 ```text
-requested location  = ปลายทางจาก deterministic event replay
+requested location  = movement intent จาก real-time simulation session
 confirmed location  = ตำแหน่งที่ Godot ยืนยันหลัง actor เดินถึงจริง
 ```
 
@@ -2112,21 +2113,22 @@ logical location เปลี่ยนเพียงครั้งเดีย
 เส้นทางข้ามหลายห้องและประตู replay ซ้ำได้จาก seed เดิม
 ```
 
-ขอบเขตปัจจุบัน: behavior scenario ยังถูกคำนวณล่วงหน้า แล้ว Godot bridge แปลง
-movement event เป็น live request อีกชั้นหนึ่ง ขั้นถัดไปคือให้ simulation session
-ตัดสินใจและรอ action completion แบบ real-time โดยไม่ต้อง precompute movement event
+Phase 15 เปลี่ยน Godot client ให้ใช้ coordinator นี้ผ่าน incremental session โดยตรงแล้ว
 
 ---
 
 ## Phase 15 — Real-time Simulation Session
 
-สถานะ: ขั้นถัดไป
+สถานะ: เสร็จแล้ว — `BasementScenarioSession` รันทีละ tick และให้ NPC Brain
+ส่ง movement request เข้า `LiveMovementCoordinator` โดยตรง หาก actor กำลังเดิน
+routine จะเพิ่ม needs/time ต่อ แต่ไม่เลือก goal ซ้อน และ observer เช่น BoundaryProbe
+หรือ ShareSuspicion จะทำงานเมื่อ arrival acknowledgement สำเร็จเท่านั้น
 
-- เปลี่ยน Basement scenario จาก one-shot `Run()` เป็น session ที่ tick เพิ่มทีละขั้น
-- ให้ NPC Brain ส่ง movement request ตรงเข้า `LiveMovementCoordinator`
-- actor ที่กำลังเดินต้องมี busy state และไม่เลือก movement goal ซ้อนโดยไม่ตั้งใจ
-- ส่ง committed world events เข้า perception/memory/suspicion pipeline ใน tick ถัดไป
-- รักษา pause, step, speed, reset และ deterministic replay เดิม
+- `BasementScenario.Run()` ใช้ session เดียวกันในโหมด auto-ack สำหรับ headless regression
+- Godot ใช้ external acknowledgement จาก `NavigationAgent3D`
+- movement failure ยกเลิก pending decision และ retry ได้โดยไม่เปลี่ยน logical location
+- completion timestamp ใช้เวลา arrival จริง ไม่ใช่เวลาที่ request ถูกสร้าง
+- pause, step, speed, interaction, trace และ reset ทำงานกับ live session
 
 DoD:
 
@@ -2134,6 +2136,14 @@ DoD:
 ไม่มี precomputed EnterLocation event สำหรับ movement ที่ Godot กำลังแสดง
 NPC decision รอ Completed/Failed ก่อนวางแผน action ถัดไป
 headless session และ Godot session ให้ผล logical event stream ตรงกันเมื่อใช้ acknowledgement ชุดเดียวกัน
+```
+
+Godot smoke run ปัจจุบันปิด feedback loop ที่ tick 29 ตามเวลาการเดินจริง:
+
+```text
+Anna arrives Basement → George arrives/probes Basement
+→ Anna returns Lobby/shares information
+→ Anna and Bob follow George to Basement
 ```
 
 ---
@@ -2393,16 +2403,19 @@ Foundation ถือว่าพร้อมเมื่อ:
 - [x] Godot adapter สามารถแสดงผล simulation ได้
 - [x] Live movement commit logical location หลัง physical arrival
 - [x] Hotel topology/marker/portal/door เป็น data-driven
+- [x] NPC Brain รันแบบ incremental และรอ physical acknowledgement
+- [x] Godot ไม่ใช้ precomputed movement event เป็นตัวขับ actor แล้ว
 - [x] ยังไม่มี gameplay system ที่ต้องพึ่ง UI ใหญ่
 
 ---
 
 # 31. Recommended Immediate Goal
 
-สถานะ: Hotel Topology + Live Action Handshake เสร็จแล้ว
+สถานะ: Roadmap ระบบต้นแบบ Phase 0–15 เสร็จครบแล้ว
 
-เป้าหมายถัดไปคือ Phase 15: ทำ real-time simulation session เพื่อให้ NPC Brain
-ส่ง action เข้า live movement lifecycle โดยตรง แทนการแปลงจาก precomputed event replay
+เป้าหมายถัดไปควรกำหนดเป็น Post-MVP จาก playtest จริง โดยลำดับที่แนะนำคือ
+player agency/interaction loop, save-load session snapshot, content authoring tools
+และเพิ่ม hotel encounters มากกว่าการขยายระบบ AI ใหม่ทันที
 
 ---
 

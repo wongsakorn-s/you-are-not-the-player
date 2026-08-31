@@ -40,6 +40,16 @@ public sealed class LocationTransitionTracker
         return true;
     }
 
+    public void CancelRequest(EntityId actor)
+    {
+        if (!_confirmed.TryGetValue(actor, out LocationId confirmed))
+        {
+            throw new InvalidOperationException($"Actor '{actor}' has not been initialized.");
+        }
+
+        _requested[actor] = confirmed;
+    }
+
     public bool IsInTransit(EntityId actor) =>
         _requested.TryGetValue(actor, out LocationId requested) &&
         (!_confirmed.TryGetValue(actor, out LocationId confirmed) || requested != confirmed);
