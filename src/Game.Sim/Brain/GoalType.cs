@@ -18,4 +18,6 @@ public enum GoalType
     AvoidTarget = 14,
     ExploreBoundary = 15,
     CompleteInteraction = 16,
+    RallyCoalition = 17,
+    ConfrontTarget = 18,
 }

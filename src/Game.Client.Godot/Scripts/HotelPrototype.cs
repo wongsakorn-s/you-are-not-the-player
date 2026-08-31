@@ -1,15 +1,21 @@
 using System.Globalization;
 using Game.Client.Godot.Adapters;
+using Game.Client.Godot.Audio;
 using Game.Client.Godot.Configuration;
 using Game.Client.Godot.Debug;
 using Game.Client.Godot.World;
 using Game.Sim.Actions;
+using Game.Sim.Conspiracy;
 using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
 using Game.Sim.Logging;
 using Game.Sim.Memory;
+using Game.Sim.Objects;
+using Game.Sim.Player;
+using Game.Sim.Routines;
 using Game.Sim.Scenarios;
+using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
 using Godot;
 
@@ -33,13 +39,26 @@ public sealed partial class HotelPrototype : Node3D
         new Color("ff7f9c"),
         new Color("ffe066"),
     ];
+    private static readonly LocationId[] LocationShortcuts = [
+        new("lobby"),
+        new("hallway"),
+        new("kitchen"),
+        new("room-201"),
+        new("basement"),
+        new("garden"),
+        new("security-room"),
+        new("office"),
+    ];
 
     private readonly GodotWorldAdapter _worldAdapter = new();
     private readonly Dictionary<EntityId, MovementSnapshot> _lastMovements = [];
+    private readonly Dictionary<string, InteractiveObjectNode> _objectNodes = [];
     private BasementRealtimeAdapter? _simulation;
     private HotelWorldDefinition? _hotel;
     private DebugHud? _hud;
+    private HotelAudioController? _audioController;
     private RestrictedDoorNode? _basementDoor;
+    private EntityId _possessedPlayerActor = BasementScenario.George;
     private int _selectedActorIndex;
     private int _interactionSequence;
     private bool _completionLogged;
@@ -50,6 +69,9 @@ public sealed partial class HotelPrototype : Node3D
         BuildEnvironment(_hotel);
         _simulation = CreateSimulation();
         BuildActorViews();
+
+        _audioController = new HotelAudioController();
+        AddChild(_audioController);
 
         _hud = new DebugHud();
         AddChild(_hud);
@@ -97,6 +119,59 @@ public sealed partial class HotelPrototype : Node3D
             case Key.Tab:
                 _selectedActorIndex = (_selectedActorIndex + 1) % Actors.Length;
                 break;
+            case Key.P:
+                _possessedPlayerActor = Actors[_selectedActorIndex];
+                _simulation.PlayerController.SetPlayerEntity(_possessedPlayerActor);
+                GD.Print($"[Player Controller] Now controlling {_possessedPlayerActor.Value}");
+                break;
+            case Key.Key1:
+                ExecutePlayerMove(LocationShortcuts[0]);
+                break;
+            case Key.Key2:
+                ExecutePlayerMove(LocationShortcuts[1]);
+                break;
+            case Key.Key3:
+                ExecutePlayerMove(LocationShortcuts[2]);
+                break;
+            case Key.Key4:
+                ExecutePlayerMove(LocationShortcuts[3]);
+                break;
+            case Key.Key5:
+                ExecutePlayerMove(LocationShortcuts[4]);
+                break;
+            case Key.Key6:
+                ExecutePlayerMove(LocationShortcuts[5]);
+                break;
+            case Key.Key7:
+                ExecutePlayerMove(LocationShortcuts[6]);
+                break;
+            case Key.Key8:
+                ExecutePlayerMove(LocationShortcuts[7]);
+                break;
+            case Key.O:
+                ExecuteObjectInteraction();
+                break;
+            case Key.T:
+                ExecutePlayerDialogue();
+                break;
+            case Key.Y:
+                ExecutePlayerInquireObject();
+                break;
+            case Key.J:
+                ExecuteDumpJournal();
+                break;
+            case Key.K:
+                ExecuteCheckConspiracy();
+                break;
+            case Key.Z:
+                ExecuteClimaxChoice(PlayerClimaxChoice.ConfessReality);
+                break;
+            case Key.X:
+                ExecuteClimaxChoice(PlayerClimaxChoice.DenyAndCounter);
+                break;
+            case Key.C:
+                ExecuteClimaxChoice(PlayerClimaxChoice.Flee);
+                break;
             case Key.E:
                 ExecuteInteraction();
                 break;
@@ -105,6 +180,12 @@ public sealed partial class HotelPrototype : Node3D
                 break;
             case Key.F5:
                 DumpEventTrace();
+                break;
+            case Key.F6:
+                ExecuteQuickSave();
+                break;
+            case Key.F7:
+                ExecuteQuickLoad();
                 break;
             case Key.R:
                 ResetSimulation();
@@ -262,6 +343,279 @@ public sealed partial class HotelPrototype : Node3D
         HandleSimulationChanges();
     }
 
+    private void ExecutePlayerMove(LocationId destination)
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        _simulation.PlayerController.SetPlayerEntity(_possessedPlayerActor);
+        if (destination == BasementScenario.Basement)
+        {
+            OpenBasementDoor();
+        }
+
+        NpcMovementExecution execution = _simulation.PlayerMove(destination);
+        if (execution.Status == NpcMovementExecutionStatus.Pending && execution.Movement is not null)
+        {
+            _lastMovements[_possessedPlayerActor] = execution.Movement;
+            _worldAdapter.RequestMove(_possessedPlayerActor, destination);
+            GD.Print($"[Player Controller] Moving {_possessedPlayerActor.Value} to {destination.Value}...");
+        }
+        else if (execution.Status == NpcMovementExecutionStatus.Failed)
+        {
+            GD.Print($"[Player Controller] Move to {destination.Value} failed (route or access unavailable).");
+        }
+
+        HandleSimulationChanges();
+    }
+
+    private void ExecutePlayerDialogue()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        _simulation.PlayerController.SetPlayerEntity(_possessedPlayerActor);
+        IReadOnlyList<EntityId> present = _simulation.PlayerController.GetPresentActors();
+        if (present.Count == 0)
+        {
+            GD.Print($"[Dialogue] No other characters present in {_simulation.PlayerController.CurrentLocation.Value} to speak with.");
+            return;
+        }
+
+        EntityId partner = present[0];
+        EntityId subject = _possessedPlayerActor == BasementScenario.George ? BasementScenario.Anna : BasementScenario.George;
+        DialogueOutcome outcome = _simulation.Talk(new DialogueRequest(
+            DialogueActionKind.AskAboutSubject,
+            requester: _possessedPlayerActor,
+            partner: partner,
+            subject: subject));
+
+        _audioController?.PlayDialogueChime();
+        GD.Print($"[Dialogue with {partner.Value}] {outcome.Text}");
+        HandleSimulationChanges();
+    }
+
+    private void ExecutePlayerInquireObject()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        _simulation.PlayerController.SetPlayerEntity(_possessedPlayerActor);
+        IReadOnlyList<EntityId> present = _simulation.PlayerController.GetPresentActors();
+        if (present.Count == 0)
+        {
+            GD.Print($"[Inquiry] No other characters present in {_simulation.PlayerController.CurrentLocation.Value} to speak with.");
+            return;
+        }
+
+        EntityId partner = present[0];
+        var objects = _simulation.GetPresentObjects();
+        DialogueOutcome outcome;
+        if (objects.Count > 0)
+        {
+            outcome = _simulation.InquireObject(partner, objects[0].Id);
+        }
+        else
+        {
+            PlayerJournal journal = _simulation.GetPlayerJournal(_possessedPlayerActor);
+            if (journal.Entries.Count > 0)
+            {
+                outcome = _simulation.ConfrontWithEvidence(partner, journal.Entries[0].Id);
+            }
+            else
+            {
+                outcome = _simulation.Talk(new DialogueRequest(
+                    DialogueActionKind.InquireSchedule,
+                    requester: _possessedPlayerActor,
+                    partner: partner));
+            }
+        }
+
+        _audioController?.PlayDialogueChime();
+        GD.Print($"\n=== [INQUIRY WITH {partner.Value.ToUpperInvariant()}] ===");
+        GD.Print($"Result: {outcome.Text}");
+        if (outcome.TransferredMemory is not null)
+        {
+            GD.Print($"Memory Learned: [Id: {outcome.TransferredMemory.Id.Value}] {outcome.TransferredMemory.EventType} at {outcome.TransferredMemory.Location?.Value}");
+        }
+        GD.Print("===================================================\n");
+        HandleSimulationChanges();
+    }
+
+    private void ExecuteDumpJournal()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        PlayerJournal journal = _simulation.GetPlayerJournal(_possessedPlayerActor);
+        GD.Print($"\n=== JOURNAL FOR {journal.PlayerEntity.Value.ToUpperInvariant()} (Location: {journal.CurrentLocation.Value}) ===");
+        GD.Print($"Known Memories ({journal.Entries.Count}):");
+        foreach (PlayerJournalEntry entry in journal.Entries)
+        {
+            GD.Print($"  * {entry.Summary}");
+        }
+        GD.Print($"Suspicions ({journal.SuspicionSnapshots.Count}):");
+        foreach (SuspicionSnapshot suspicion in journal.SuspicionSnapshots)
+        {
+            GD.Print($"  * {suspicion.Subject.Value}: role dev {suspicion.Vector.RoleDeviation:0.0}, secrecy {suspicion.Vector.Secrecy:0.0} ({suspicion.Evidence.Count} evidence)");
+        }
+        GD.Print("===================================================\n");
+    }
+
+    private void ExecuteCheckConspiracy()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        AccusationCoalition? coalition = _simulation.EvaluateConspiracy(_possessedPlayerActor);
+        GD.Print($"\n=== [NPC CONSPIRACY & COALITION STATUS] ===");
+        if (coalition is null)
+        {
+            GD.Print($"No active conspiracy or coalition formed against {_possessedPlayerActor.Value}.");
+            GD.Print($"NPCs do not yet have sufficient collective suspicion to coordinate.");
+        }
+        else
+        {
+            string members = string.Join(", ", coalition.Members.Select(m => m.Value.ToUpperInvariant()));
+            GD.Print($"Target: {coalition.Target.Value.ToUpperInvariant()}");
+            GD.Print($"Initiator: {coalition.Initiator.Value.ToUpperInvariant()}");
+            GD.Print($"Members: [{members}]");
+            GD.Print($"Combined Suspicion Score: {coalition.CombinedSuspicionScore:0.0}");
+            GD.Print($"Stage: {coalition.Stage}");
+            GD.Print($"Consensus Reached: {coalition.ConsensusReached}");
+            GD.Print($"Shared Evidence ({coalition.EvidenceSummaries.Count}):");
+            foreach (string evidence in coalition.EvidenceSummaries)
+            {
+                GD.Print($"  * {evidence}");
+            }
+
+            if (coalition.ConsensusReached)
+            {
+                _audioController?.PlayClimaxAlert();
+                GD.Print($"\n[!!!] CLIMAX TRIGGERED: The coalition has gathered in the Lobby to confront you!");
+                GD.Print($"Press [Z] to Confess Reality, [X] to Deny/Counter-Accuse, [C] to Flee!");
+                _simulation.TriggerConfrontation(BasementScenario.Lobby);
+            }
+        }
+        GD.Print("===========================================\n");
+    }
+
+    private void ExecuteClimaxChoice(PlayerClimaxChoice choice)
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        _audioController?.PlayDialogueChime();
+        ClimaxResolution resolution = _simulation.ResolveClimax(choice, _possessedPlayerActor);
+        GD.Print($"\n=======================================================");
+        GD.Print($"=== CLIMAX RESOLUTION: {resolution.Title.ToUpperInvariant()} ===");
+        GD.Print($"=======================================================");
+        GD.Print(resolution.NarrativeText);
+        GD.Print($"Player Vindicated: {resolution.PlayerVindicated}");
+        GD.Print($"Existential Awakening: {resolution.ExistentialAwakeningTriggered}");
+        GD.Print($"Player Fled: {resolution.PlayerFled}");
+        GD.Print($"=======================================================\n");
+        HandleSimulationChanges();
+    }
+
+    private void ExecuteQuickSave()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        string savePath = ProjectSettings.GlobalizePath("user://quicksave.json");
+        SessionSnapshot snapshot = _simulation.CaptureSnapshot();
+        SessionSnapshotSerializer.SaveToFile(snapshot, savePath);
+        GD.Print($"[QuickSave] Snapshot saved to {savePath} (Tick: {snapshot.Metadata.CurrentTick}, Phase: {snapshot.Metadata.Phase})");
+    }
+
+    private void ExecuteQuickLoad()
+    {
+        string savePath = ProjectSettings.GlobalizePath("user://quicksave.json");
+        if (!File.Exists(savePath))
+        {
+            GD.PrintErr($"[QuickLoad] No quicksave found at {savePath}");
+            return;
+        }
+
+        SessionSnapshot snapshot = SessionSnapshotSerializer.LoadFromFile(savePath);
+        string rulesPath = ResolveRulesPath();
+        InMemorySuspicionRuleRepository rules = JsonSuspicionRuleParser.Parse(File.ReadAllText(rulesPath));
+
+        _simulation = BasementRealtimeAdapter.FromSnapshot(snapshot, rules);
+        _lastMovements.Clear();
+        _worldAdapter.SetMovementPaused(_simulation.IsPaused);
+        _worldAdapter.SetMovementSpeed(_simulation.Speed);
+        if (_simulation.GetLogicalLocation(BasementScenario.George) == BasementScenario.Basement ||
+            _simulation.GetLogicalLocation(BasementScenario.Anna) == BasementScenario.Basement)
+        {
+            OpenBasementDoor();
+        }
+        else
+        {
+            CloseBasementDoor();
+        }
+
+        _worldAdapter.Synchronize(GetCoreLocations(), immediate: true);
+        _simulation.TriggerSaveReloadAnomaly(_possessedPlayerActor);
+        _audioController?.PlayAnomalyWarp();
+        GD.Print($"[QuickLoad] Restored session from {savePath} (Tick: {snapshot.Metadata.CurrentTick}, Phase: {snapshot.Metadata.Phase})");
+        GD.Print($"[REALITY ANOMALY] NPCs in the room sense an unnatural temporal shift (Déjà Vu)!");
+        HandleSimulationChanges();
+    }
+
+    private void ExecuteObjectInteraction()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        var presentObjects = _simulation.GetPresentObjects();
+        if (presentObjects.Count == 0)
+        {
+            GD.Print($"[Object Inspection] No interactive objects found in this room.");
+            return;
+        }
+
+        InteractiveObject targetObj = presentObjects[0];
+        ObjectActionResult result = _simulation.InspectObject(targetObj.Id);
+        if (!result.Succeeded && targetObj.IsLocked)
+        {
+            // Try to tamper / unlock
+            result = _simulation.TamperObject(targetObj.Id, targetObj.RequiredKeyId);
+        }
+
+        if (_objectNodes.TryGetValue(targetObj.Id, out InteractiveObjectNode? objNode))
+        {
+            objNode.PlayInteractionSound(targetObj.Kind);
+        }
+
+        GD.Print($"\n=== [INTERACTIVE OBJECT: {targetObj.DisplayName}] ===");
+        GD.Print($"Status: {(result.Succeeded ? "SUCCESS" : "FAILED")} | Kind: {targetObj.Kind} | Locked: {targetObj.IsLocked}");
+        GD.Print($"Message: {result.Message}");
+        if (!string.IsNullOrEmpty(result.DiscoveredClue))
+        {
+            GD.Print($"Discovered Clue: {result.DiscoveredClue}");
+        }
+        GD.Print("===================================================\n");
+        HandleSimulationChanges();
+    }
+
     private void ExecuteInteraction()
     {
         if (_simulation is null)
@@ -341,16 +695,19 @@ public sealed partial class HotelPrototype : Node3D
         _hud.SetStatus(string.Format(
             CultureInfo.InvariantCulture,
             "YOU ARE NOT THE PLAYER — REAL-TIME HOTEL\n\n" +
-            "Seed: {0}\nTick: {1} (minimum {2})\nState: {3}   Speed: x{4:0}\n" +
-            "Live fingerprint: {5}…\n\nInspecting: {6}\nPhysical: {7}\n" +
-            "Core location: {8}\nMovement: {9}\n" +
+            "Seed: {0} | Tick: {1} | State: {2} | Speed: x{3:0}\n" +
+            "Live fingerprint: {4}…\n\n" +
+            "🎮 Possessed (Player): {5}\n" +
+            "👁️ Inspecting (Actor): {6}\n" +
+            "Physical: {7} | Core: {8}\n" +
+            "Movement: {9}\n" +
             "Memory: {10} episodic / {11} social\n{12}",
             _simulation.Seed,
             _simulation.CurrentTick,
-            _simulation.MinimumTicks,
             state,
             _simulation.Speed,
             fingerprint,
+            _possessedPlayerActor.Value,
             selected.Value,
             physicalLocation,
             coreLocation.Value,
@@ -367,6 +724,58 @@ public sealed partial class HotelPrototype : Node3D
                 .Select(FormatEvent));
         _hud.SetEvents("LIVE WORLD EVENTS\n\n" +
             (recentEvents.Length == 0 ? "Waiting for simulation…" : recentEvents));
+
+        UpdateNpcVisualEmotions();
+    }
+
+    private void UpdateNpcVisualEmotions()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        AccusationCoalition? coalition = _simulation.EvaluateConspiracy(_possessedPlayerActor);
+
+        for (int i = 0; i < Actors.Length; i++)
+        {
+            EntityId actor = Actors[i];
+            NpcActorNode? view = _worldAdapter.GetActorView(actor);
+            if (view is null)
+            {
+                continue;
+            }
+
+            if (actor == _possessedPlayerActor)
+            {
+                view.SetEmotionBubble("🎮 PLAYER", new Color(0.2f, 0.9f, 1.0f));
+            }
+            else if (coalition is not null && coalition.Members.Contains(actor))
+            {
+                view.SetEmotionBubble("👥 COALITION", new Color(1.0f, 0.35f, 0.2f));
+            }
+            else if (_simulation.GetMemories(actor).Any(m => m.EventType == EventType.RealityAnomaly))
+            {
+                view.SetEmotionBubble("⚡ DÉJÀ VU", new Color(0.85f, 0.4f, 1.0f));
+            }
+            else if (_simulation.GetSuspicion(actor, _possessedPlayerActor).Evidence.Count > 0)
+            {
+                view.SetEmotionBubble("❓ SUSPICIOUS", new Color(1.0f, 0.85f, 0.2f));
+            }
+            else
+            {
+                view.ClearEmotionBubble();
+            }
+        }
+
+        foreach ((string objId, InteractiveObjectNode node) in _objectNodes)
+        {
+            InteractiveObject? obj = _simulation.Objects.GetObject(objId);
+            if (obj is not null)
+            {
+                node.UpdateState(obj);
+            }
+        }
     }
 
     private string GetSuspicionText(EntityId selected)
@@ -456,6 +865,24 @@ public sealed partial class HotelPrototype : Node3D
             AddRoomLabel(
                 location.DisplayName,
                 new Vector3(location.Marker.X, 0.05f, location.Marker.Z + 1.5f));
+        }
+
+        HotelObjectRegistry defaultObjects = HotelObjectRegistry.CreateDefaultHotelObjects();
+        foreach (InteractiveObject obj in defaultObjects.AllObjects)
+        {
+            HotelLocationDefinition? locDef = hotel.Locations.FirstOrDefault(l => l.Id == obj.Location.Value);
+            if (locDef is not null)
+            {
+                Vector3 objPos = new(
+                    locDef.Marker.X - 1.6f,
+                    locDef.Marker.Y + 0.3f,
+                    locDef.Marker.Z - 1.2f);
+
+                var objNode = new InteractiveObjectNode();
+                objNode.Initialize(obj, objPos);
+                AddChild(objNode);
+                _objectNodes[obj.Id] = objNode;
+            }
         }
 
         BuildNavigationRegion(hotel.Navigation);

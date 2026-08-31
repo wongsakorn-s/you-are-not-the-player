@@ -10,4 +10,5 @@ public enum EventTag
     Secret = 6,
     AfterHours = 7,
     Pattern = 8,
+    Suspicious = 9,
 }

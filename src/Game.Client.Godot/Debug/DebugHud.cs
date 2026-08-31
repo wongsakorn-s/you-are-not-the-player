@@ -24,8 +24,7 @@ public sealed partial class DebugHud : CanvasLayer
         var helpBackground = CreateBackground(new Vector2(16, 652), new Vector2(1248, 52));
         AddChild(helpBackground);
         ConfigureLabel(_help, new Vector2(28, 662), new Vector2(1220, 34), fontSize: 14);
-        _help.Text = "E Door/Interact | F1 Pause | Space Step | F2 x2 | F3 x10 | Tab Inspect | F4 State | F5 Trace | R Reset";
-        AddChild(_help);
+        _help.Text = "P Possess | 1-8 Move | T Talk | Y Inquire | O Object | E Door | J Journal | K Conspiracy | Z/X/C Climax | F6/F7 Save/Load | Space Step | R Reset";
     }
 
     public void SetStatus(string text) => _status.Text = text;

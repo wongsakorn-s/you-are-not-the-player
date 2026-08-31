@@ -1,10 +1,14 @@
 using Game.Sim.Actions;
+using Game.Sim.Conspiracy;
 using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
 using Game.Sim.Memory;
+using Game.Sim.Objects;
+using Game.Sim.Player;
 using Game.Sim.Routines;
 using Game.Sim.Scenarios;
+using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
 
 namespace Game.Client.Godot.Adapters;
@@ -100,6 +104,20 @@ public sealed class BasementRealtimeAdapter
     public void Interact(EntityId actor, string interactionId) =>
         _session.Interact(actor, interactionId);
 
+    public PlayerSessionController PlayerController => _session.PlayerController;
+
+    public DialogueOutcome Talk(DialogueRequest request) => _session.Talk(request);
+
+    public DialogueOutcome InquireObject(EntityId partner, string objectId) =>
+        _session.PlayerController.InquireObject(partner, objectId);
+
+    public DialogueOutcome ConfrontWithEvidence(EntityId partner, MemoryId evidenceMemoryId) =>
+        _session.PlayerController.ConfrontWithEvidence(partner, evidenceMemoryId);
+
+    public PlayerJournal GetPlayerJournal(EntityId? actor = null) => _session.GetPlayerJournal(actor);
+
+    public NpcMovementExecution PlayerMove(LocationId destination) => _session.PlayerController.RequestMove(destination);
+
     public void TogglePause() => IsPaused = !IsPaused;
 
     public void SetSpeed(float speed)
@@ -111,4 +129,29 @@ public sealed class BasementRealtimeAdapter
 
         Speed = speed;
     }
+
+    public SessionSnapshot CaptureSnapshot() => _session.CaptureSnapshot();
+
+    public HotelObjectRegistry Objects => _session.Objects;
+
+    public IReadOnlyList<InteractiveObject> GetPresentObjects() => _session.PlayerController.GetPresentObjects();
+
+    public ObjectActionResult InspectObject(string objectId) => _session.InspectObject(objectId);
+
+    public ObjectActionResult TamperObject(string objectId, string? keyId = null) => _session.TamperObject(objectId, keyId);
+
+    public WorldEvent TriggerSaveReloadAnomaly(EntityId? player = null) => _session.TriggerSaveReloadAnomaly(player);
+
+    public WorldEvent TriggerFastTravelAnomaly(EntityId actor, LocationId destination) => _session.TriggerFastTravelAnomaly(actor, destination);
+
+    public AccusationCoalition? EvaluateConspiracy(EntityId? target = null) => _session.EvaluateConspiracy(target);
+
+    public WorldEvent? TriggerConfrontation(LocationId? location = null) => _session.TriggerConfrontation(location);
+
+    public ClimaxResolution ResolveClimax(PlayerClimaxChoice choice, EntityId? target = null) => _session.ResolveClimax(choice, target);
+
+    public static BasementRealtimeAdapter FromSnapshot(
+        SessionSnapshot snapshot,
+        ISuspicionRuleRepository rules) =>
+        new(BasementScenarioSession.FromSnapshot(snapshot, rules));
 }

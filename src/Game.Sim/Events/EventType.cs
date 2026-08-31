@@ -13,4 +13,5 @@ public enum EventType
     BehaviorPattern = 9,
     ShareInformation = 10,
     AskInformation = 11,
+    RealityAnomaly = 12,
 }

@@ -1,3 +1,4 @@
+using Game.Client.Godot.Audio;
 using Godot;
 
 namespace Game.Client.Godot.World;
@@ -6,9 +7,16 @@ public sealed partial class NpcActorNode : Node3D
 {
     private const float ArrivalDistance = 0.16f;
     private const float BaseMovementSpeed = 3.6f;
+    private const float StepDistanceInterval = 1.1f;
+
+    private static readonly AudioStreamWav FootstepStream = ProceduralAudioSynthesizer.CreateFootstep();
 
     private NavigationAgent3D? _navigationAgent;
+    private Label3D? _nameLabel;
+    private Label3D? _emotionBubble;
+    private AudioStreamPlayer3D? _audioPlayer;
     private Vector3 _destination;
+    private float _distanceAccumulator;
 
     public event Action<NpcActorNode, Vector3>? DestinationReached;
 
@@ -44,7 +52,7 @@ public sealed partial class NpcActorNode : Node3D
         mesh.Material = material;
         AddChild(new MeshInstance3D { Mesh = mesh });
 
-        AddChild(new Label3D
+        _nameLabel = new Label3D
         {
             Text = actorId,
             Position = new Vector3(0.0f, 1.25f, 0.0f),
@@ -52,7 +60,28 @@ public sealed partial class NpcActorNode : Node3D
             FontSize = 28,
             OutlineSize = 8,
             Modulate = Colors.White,
-        });
+        };
+        AddChild(_nameLabel);
+
+        _emotionBubble = new Label3D
+        {
+            Text = string.Empty,
+            Position = new Vector3(0.0f, 1.70f, 0.0f),
+            Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+            FontSize = 30,
+            OutlineSize = 10,
+            Modulate = Colors.Yellow,
+            Visible = false,
+        };
+        AddChild(_emotionBubble);
+
+        _audioPlayer = new AudioStreamPlayer3D
+        {
+            UnitSize = 10.0f,
+            MaxDistance = 35.0f,
+            VolumeDb = -4.0f,
+        };
+        AddChild(_audioPlayer);
 
         _navigationAgent = new NavigationAgent3D
         {
@@ -64,6 +93,21 @@ public sealed partial class NpcActorNode : Node3D
             AvoidanceEnabled = false,
         };
         AddChild(_navigationAgent);
+    }
+
+    public void SetEmotionBubble(string text, Color color)
+    {
+        if (_emotionBubble is null) return;
+        _emotionBubble.Text = text;
+        _emotionBubble.Modulate = color;
+        _emotionBubble.Visible = !string.IsNullOrWhiteSpace(text);
+    }
+
+    public void ClearEmotionBubble()
+    {
+        if (_emotionBubble is null) return;
+        _emotionBubble.Text = string.Empty;
+        _emotionBubble.Visible = false;
     }
 
     public override void _PhysicsProcess(double delta)
@@ -105,6 +149,21 @@ public sealed partial class NpcActorNode : Node3D
             BaseMovementSpeed * SpeedMultiplier * (float)delta,
             remaining.Length());
         GlobalPosition += direction.Normalized() * step;
+
+        _distanceAccumulator += step;
+        if (_distanceAccumulator >= StepDistanceInterval)
+        {
+            _distanceAccumulator = 0.0f;
+            PlayFootstep();
+        }
+    }
+
+    public void PlayFootstep()
+    {
+        if (_audioPlayer is null) return;
+        _audioPlayer.Stream = FootstepStream;
+        _audioPlayer.PitchScale = 0.85f + Random.Shared.NextSingle() * 0.3f;
+        _audioPlayer.Play();
     }
 
     public void MoveTo(Vector3 destination, bool immediate)

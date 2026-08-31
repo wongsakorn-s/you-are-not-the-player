@@ -85,5 +85,39 @@
       "metaBehavior": 30,
       "impossibleBehavior": 10
     }
+  },
+  {
+    "id": "witnessed_suspicious_tampering",
+    "match": {
+      "event": "Interaction",
+      "requiredTags": ["Suspicious"]
+    },
+    "effects": {
+      "criminality": 20,
+      "roleDeviation": 15,
+      "secrecy": 10
+    }
+  },
+  {
+    "id": "detected_save_reload_anomaly",
+    "match": {
+      "event": "RealityAnomaly",
+      "requiredTags": ["Pattern"]
+    },
+    "effects": {
+      "impossibleBehavior": 25,
+      "metaBehavior": 30
+    }
+  },
+  {
+    "id": "detected_the_blink_anomaly",
+    "match": {
+      "event": "RealityAnomaly",
+      "requiredTags": ["Suspicious"]
+    },
+    "effects": {
+      "impossibleBehavior": 40,
+      "metaBehavior": 20
+    }
   }
 ]

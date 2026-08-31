@@ -1,17 +1,22 @@
 using Game.Sim.Actions;
+using Game.Sim.Anomalies;
 using Game.Sim.Behaviors;
 using Game.Sim.Brain;
+using Game.Sim.Conspiracy;
 using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
 using Game.Sim.Memory;
 using Game.Sim.Needs;
+using Game.Sim.Objects;
 using Game.Sim.Patterns;
 using Game.Sim.Perception;
+using Game.Sim.Player;
 using Game.Sim.PlayerAi;
 using Game.Sim.Roles;
 using Game.Sim.Routines;
 using Game.Sim.Schedules;
+using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
 using Game.Sim.Time;
 using Game.Sim.World;
@@ -28,9 +33,15 @@ public sealed class BasementScenarioSession
     private readonly WorldEventBuffer _buffer = new();
     private readonly CoordinatedNpcMovementExecutor _movement;
     private readonly InteractionActionHandler _interactions;
+    private readonly HotelObjectRegistry _objects;
+    private readonly ObjectActionHandler _objectActions;
+    private readonly RealityAnomalySystem _anomalies;
+    private readonly ConspiracySystem _conspiracy;
     private readonly PerceptionSystem _perception;
     private readonly MemorySystem _memories;
     private readonly SuspicionSystem _suspicion;
+    private readonly DialogueSystem _dialogue;
+    private readonly PlayerSessionController _playerController;
     private readonly NpcRoutineSystem _playerRoutine;
     private readonly NpcRoutineSystem _behaviorRoutine;
     private readonly List<WorldEvent> _events = [];
@@ -45,14 +56,23 @@ public sealed class BasementScenarioSession
     public BasementScenarioSession(
         ISuspicionRuleRepository rules,
         BasementScenarioOptions options,
-        bool autoCompleteMovements = false)
+        bool autoCompleteMovements = false,
+        long initialTick = 0,
+        long firstEventId = 1,
+        long firstMemoryId = 1,
+        long firstObservationId = 1)
     {
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
         _world = CreateWorld();
 
-        var eventFactory = new WorldEventFactory(_clock, new SequentialEventIdGenerator());
+        if (initialTick > 0)
+        {
+            _clock.Advance(new SimDelta(initialTick));
+        }
+
+        var eventFactory = new WorldEventFactory(_clock, new SequentialEventIdGenerator(Math.Max(1, firstEventId)));
         var patterns = new BehaviorPatternSystem(
             _clock,
             new RuleBasedBehaviorPatternDetector(_clock.TicksPerSecond),
@@ -63,19 +83,63 @@ public sealed class BasementScenarioSession
         var movementHandler = new MoveEntityActionHandler(_world, eventFactory, _buffer);
         var access = new PortalAccessPolicy();
         access.SetAccess("basement-door", isAccessible: true);
+        LocationGraph graph = CreateLocationGraph();
         var coordinator = new LiveMovementCoordinator(
             _world,
-            CreateLocationGraph(),
+            graph,
             access,
             movementHandler);
         _movement = new CoordinatedNpcMovementExecutor(coordinator, autoCompleteMovements);
         _perception = new PerceptionSystem(
-            new LogicalPerceptionResolver(new SequentialObservationIdGenerator()));
+            new LogicalPerceptionResolver(new SequentialObservationIdGenerator(Math.Max(1, firstObservationId))));
         _memories = new MemorySystem(
             _world,
-            new SequentialMemoryIdGenerator(),
+            new SequentialMemoryIdGenerator(Math.Max(1, firstMemoryId)),
             new ExponentialMemoryDecayPolicy(0.0, 0.0));
         _suspicion = new SuspicionSystem(_memories, rules);
+        _objects = HotelObjectRegistry.CreateDefaultHotelObjects();
+        _dialogue = new DialogueSystem(
+            _clock,
+            _world,
+            _memories,
+            _suspicion,
+            eventFactory,
+            _buffer,
+            _objects);
+        _objectActions = new ObjectActionHandler(
+            _world,
+            _objects,
+            eventFactory,
+            _buffer,
+            patterns,
+            _memories);
+        _anomalies = new RealityAnomalySystem(
+            _world,
+            _clock,
+            eventFactory,
+            _buffer,
+            _memories,
+            _suspicion);
+        _conspiracy = new ConspiracySystem(
+            _world,
+            _clock,
+            _suspicion,
+            _memories,
+            eventFactory,
+            _buffer);
+        _playerController = new PlayerSessionController(
+            BasementScenario.George,
+            _clock,
+            _world,
+            graph,
+            _movement,
+            _interactions,
+            probes,
+            _dialogue,
+            _memories,
+            _suspicion,
+            _objects,
+            _objectActions);
 
         var playerDirector = new PlayerAiDirector(
             [new PlayerAiProfile(
@@ -261,6 +325,290 @@ public sealed class BasementScenarioSession
             InteractionKind.Generic,
             interactionId));
         ProcessPendingEvents();
+    }
+
+    public PlayerSessionController PlayerController => _playerController;
+
+    public DialogueSystem Dialogue => _dialogue;
+
+    public DialogueOutcome Talk(DialogueRequest request)
+    {
+        DialogueOutcome outcome = _dialogue.Execute(request);
+        ProcessPendingEvents();
+        return outcome;
+    }
+
+    public PlayerJournal GetPlayerJournal(EntityId? actor = null)
+    {
+        if (actor is not null)
+        {
+            _playerController.SetPlayerEntity(actor.Value);
+        }
+
+        return _playerController.GetJournal();
+    }
+
+    public HotelObjectRegistry Objects => _objects;
+
+    public ObjectActionResult InspectObject(string objectId)
+    {
+        ObjectActionResult result = _playerController.InspectObject(objectId);
+        ProcessPendingEvents();
+        return result;
+    }
+
+    public ObjectActionResult TamperObject(string objectId, string? keyId = null)
+    {
+        ObjectActionResult result = _playerController.TamperObject(objectId, keyId);
+        ProcessPendingEvents();
+        return result;
+    }
+
+    public RealityAnomalySystem Anomalies => _anomalies;
+
+    public WorldEvent TriggerSaveReloadAnomaly(EntityId? player = null)
+    {
+        EntityId p = player ?? _playerController.PlayerEntity;
+        LocationId loc = _world.GetEntity(p).LogicalLocation;
+        WorldEvent evt = _anomalies.TriggerSaveReloadAnomaly(p, loc);
+        ProcessPendingEvents();
+        return evt;
+    }
+
+    public WorldEvent TriggerFastTravelAnomaly(EntityId actor, LocationId destination)
+    {
+        WorldEvent evt = _anomalies.TriggerFastTravelAnomaly(actor, destination);
+        ProcessPendingEvents();
+        return evt;
+    }
+
+    public ConspiracySystem Conspiracy => _conspiracy;
+
+    public AccusationCoalition? EvaluateConspiracy(EntityId? target = null)
+    {
+        EntityId t = target ?? _playerController.PlayerEntity;
+        return _conspiracy.EvaluateAndFormCoalition(t);
+    }
+
+    public WorldEvent? TriggerConfrontation(LocationId? location = null)
+    {
+        WorldEvent? evt = _conspiracy.TriggerConfrontation(location ?? BasementScenario.Lobby);
+        if (evt is not null)
+        {
+            ProcessPendingEvents();
+        }
+
+        return evt;
+    }
+
+    public ClimaxResolution ResolveClimax(PlayerClimaxChoice choice, EntityId? target = null)
+    {
+        EntityId t = target ?? _playerController.PlayerEntity;
+        return _conspiracy.ResolveClimax(choice, t);
+    }
+
+    public SessionSnapshot CaptureSnapshot()
+    {
+        DecisionSnapshot? annaDecision = _annaInitialDecision is not null
+            ? new DecisionSnapshot(
+                _annaInitialDecision.Time.Tick,
+                _annaInitialDecision.Entity.Value,
+                _annaInitialDecision.Goal.Type.ToString(),
+                _annaInitialDecision.Goal.Destination.Value,
+                _annaInitialDecision.Goal.BaseUtility,
+                _annaInitialDecision.Moved,
+                _annaInitialDecision.Goal.Target?.Value,
+                _annaInitialDecision.Goal.InteractionPartner?.Value,
+                _annaInitialDecision.Goal.IntentId)
+            : null;
+
+        DecisionSnapshot? bobDecision = _bobInitialDecision is not null
+            ? new DecisionSnapshot(
+                _bobInitialDecision.Time.Tick,
+                _bobInitialDecision.Entity.Value,
+                _bobInitialDecision.Goal.Type.ToString(),
+                _bobInitialDecision.Goal.Destination.Value,
+                _bobInitialDecision.Goal.BaseUtility,
+                _bobInitialDecision.Moved,
+                _bobInitialDecision.Goal.Target?.Value,
+                _bobInitialDecision.Goal.InteractionPartner?.Value,
+                _bobInitialDecision.Goal.IntentId)
+            : null;
+
+        var firstSuspicionTicks = _firstSuspicion.ToDictionary(kvp => kvp.Key.Value, kvp => kvp.Value.Tick);
+
+        var metadata = new SnapshotMetadata(
+            Seed: _options.Seed,
+            CurrentTick: _clock.Now.Tick,
+            MinimumTicks: _options.Ticks,
+            Scenario: "basement",
+            Phase: Phase.ToString(),
+            ActivePlayerActor: _playerController.PlayerEntity.Value,
+            ObservationCount: _observationCount,
+            SavedAt: DateTimeOffset.UtcNow,
+            AnnaInitialDecision: annaDecision,
+            BobInitialDecision: bobDecision,
+            FirstSuspicionTicks: firstSuspicionTicks);
+
+        EntityStateSnapshot[] entities = _world.Entities
+            .Select(e => new EntityStateSnapshot(e.Id.Value, e.LogicalLocation.Value))
+            .ToArray();
+
+        WorldEventSnapshot[] events = _events
+            .Select(SessionSnapshotSerializer.ConvertEventToSnapshot)
+            .ToArray();
+
+        EntityMemoryStoreSnapshot[] memories = _memories.GetAllStores()
+            .Select(store => new EntityMemoryStoreSnapshot(
+                store.Owner.Value,
+                store.Memories.Select(SessionSnapshotSerializer.ConvertMemoryToSnapshot).ToArray()))
+            .ToArray();
+
+        SuspicionCaseSnapshot[] suspicions = _suspicion.GetAllCases()
+            .Select(c => new SuspicionCaseSnapshot(
+                c.Observer.Value,
+                c.Subject.Value,
+                c.Contributions.Select(contrib => new EvidenceContributionSnapshot(
+                    contrib.SourceMemory.Value,
+                    contrib.RuleId,
+                    contrib.Dimension.ToString(),
+                    contrib.Strength)).ToArray()))
+            .ToArray();
+
+        MovementRequestSnapshot[] movements = _movement.PendingMovements
+            .Select(m => new MovementRequestSnapshot(
+                m.RequestId.Value,
+                m.Actor.Value,
+                m.Origin.Value,
+                m.Destination.Value,
+                m.Route?.Select(l => l.Value).ToArray() ?? [],
+                m.Status.ToString()))
+            .ToArray();
+
+        return new SessionSnapshot(
+            metadata,
+            entities,
+            events,
+            memories,
+            suspicions,
+            movements);
+    }
+
+    public static BasementScenarioSession FromSnapshot(
+        SessionSnapshot snapshot,
+        ISuspicionRuleRepository rules,
+        bool autoCompleteMovements = false)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(rules);
+
+        var options = new BasementScenarioOptions(
+            seed: snapshot.Metadata.Seed,
+            ticks: snapshot.Metadata.MinimumTicks > 0 ? snapshot.Metadata.MinimumTicks : 16);
+
+        long maxEventId = snapshot.Events.Count > 0 ? snapshot.Events.Max(e => e.Id) : 0;
+        long maxMemoryId = snapshot.Memories.SelectMany(m => m.Memories).Any()
+            ? snapshot.Memories.SelectMany(m => m.Memories).Max(m => m.Id)
+            : 0;
+
+        var session = new BasementScenarioSession(
+            rules,
+            options,
+            autoCompleteMovements,
+            initialTick: snapshot.Metadata.CurrentTick,
+            firstEventId: maxEventId + 1,
+            firstMemoryId: maxMemoryId + 1);
+
+        foreach (EntityStateSnapshot entitySnapshot in snapshot.Entities)
+        {
+            var entityId = new EntityId(entitySnapshot.EntityId);
+            var locId = new LocationId(entitySnapshot.LocationId);
+            session._world.RelocateEntity(entityId, locId);
+        }
+
+        foreach (EntityMemoryStoreSnapshot storeSnapshot in snapshot.Memories)
+        {
+            var owner = new EntityId(storeSnapshot.Owner);
+            foreach (MemoryRecordSnapshot memorySnapshot in storeSnapshot.Memories)
+            {
+                MemoryRecord memory = SessionSnapshotSerializer.ConvertSnapshotToMemory(memorySnapshot);
+                session._memories.LoadMemory(owner, memory);
+            }
+        }
+
+        foreach (SuspicionCaseSnapshot caseSnapshot in snapshot.Suspicions)
+        {
+            var observer = new EntityId(caseSnapshot.Observer);
+            var subject = new EntityId(caseSnapshot.Subject);
+            var contributions = caseSnapshot.Contributions.Select(c => new EvidenceContribution(
+                new MemoryId(c.SourceMemory),
+                c.RuleId,
+                Enum.Parse<SuspicionDimension>(c.Dimension, ignoreCase: true),
+                c.Strength));
+            session._suspicion.LoadCase(observer, subject, contributions);
+        }
+
+        session._events.Clear();
+        foreach (WorldEventSnapshot eventSnapshot in snapshot.Events)
+        {
+            WorldEvent worldEvent = SessionSnapshotSerializer.ConvertSnapshotToEvent(eventSnapshot);
+            session._events.Add(worldEvent);
+        }
+
+        session._observationCount = snapshot.Metadata.ObservationCount;
+        session.Phase = Enum.Parse<BasementSessionPhase>(snapshot.Metadata.Phase, ignoreCase: true);
+
+        session._restrictedEntry = session._events.FirstOrDefault(e =>
+            e.Actor == BasementScenario.George &&
+            e.Location == BasementScenario.Basement &&
+            e.Type == EventType.EnterLocation);
+
+        if (snapshot.Metadata.AnnaInitialDecision is not null)
+        {
+            var d = snapshot.Metadata.AnnaInitialDecision;
+            session._annaInitialDecision = new NpcRoutineDecision(
+                new SimTime(d.Tick),
+                new EntityId(d.Entity),
+                new GoalCandidate(
+                    Enum.Parse<GoalType>(d.GoalType, ignoreCase: true),
+                    new LocationId(d.Destination),
+                    d.BaseUtility,
+                    intentId: d.IntentId,
+                    target: string.IsNullOrEmpty(d.Target) ? null : new EntityId(d.Target),
+                    interactionPartner: string.IsNullOrEmpty(d.InteractionPartner) ? null : new EntityId(d.InteractionPartner)),
+                d.Moved);
+        }
+
+        if (snapshot.Metadata.BobInitialDecision is not null)
+        {
+            var d = snapshot.Metadata.BobInitialDecision;
+            session._bobInitialDecision = new NpcRoutineDecision(
+                new SimTime(d.Tick),
+                new EntityId(d.Entity),
+                new GoalCandidate(
+                    Enum.Parse<GoalType>(d.GoalType, ignoreCase: true),
+                    new LocationId(d.Destination),
+                    d.BaseUtility,
+                    intentId: d.IntentId,
+                    target: string.IsNullOrEmpty(d.Target) ? null : new EntityId(d.Target),
+                    interactionPartner: string.IsNullOrEmpty(d.InteractionPartner) ? null : new EntityId(d.InteractionPartner)),
+                d.Moved);
+        }
+
+        if (snapshot.Metadata.FirstSuspicionTicks is not null)
+        {
+            foreach ((string actor, long tick) in snapshot.Metadata.FirstSuspicionTicks)
+            {
+                session._firstSuspicion[new EntityId(actor)] = new SimTime(tick);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(snapshot.Metadata.ActivePlayerActor))
+        {
+            session._playerController.SetPlayerEntity(new EntityId(snapshot.Metadata.ActivePlayerActor));
+        }
+
+        return session;
     }
 
     public BasementScenarioResult BuildResult()
@@ -457,7 +805,14 @@ public sealed class BasementScenarioSession
     {
         var world = new WorldState();
         world.AddLocation(new LocationState(BasementScenario.Lobby));
+        world.AddLocation(new LocationState(Hallway));
+        world.AddLocation(new LocationState(new LocationId("kitchen")));
+        world.AddLocation(new LocationState(new LocationId("room-201")));
         world.AddLocation(new LocationState(BasementScenario.Basement, isRestricted: true));
+        world.AddLocation(new LocationState(new LocationId("garden")));
+        world.AddLocation(new LocationState(new LocationId("security-room"), isRestricted: true));
+        world.AddLocation(new LocationState(new LocationId("office")));
+
         world.AddEntity(new EntityState(BasementScenario.Anna, BasementScenario.Lobby));
         world.AddEntity(new EntityState(BasementScenario.Bob, BasementScenario.Lobby));
         world.AddEntity(new EntityState(BasementScenario.George, BasementScenario.Lobby));
@@ -472,8 +827,19 @@ public sealed class BasementScenarioSession
         var graph = new LocationGraph();
         graph.AddLocation(BasementScenario.Lobby);
         graph.AddLocation(Hallway);
+        graph.AddLocation(new LocationId("kitchen"));
+        graph.AddLocation(new LocationId("room-201"));
         graph.AddLocation(BasementScenario.Basement);
+        graph.AddLocation(new LocationId("garden"));
+        graph.AddLocation(new LocationId("security-room"));
+        graph.AddLocation(new LocationId("office"));
+
         graph.ConnectBidirectional(BasementScenario.Lobby, Hallway, "lobby-arch");
+        graph.ConnectBidirectional(BasementScenario.Lobby, new LocationId("garden"), "garden-gate");
+        graph.ConnectBidirectional(Hallway, new LocationId("kitchen"), "kitchen-door");
+        graph.ConnectBidirectional(Hallway, new LocationId("room-201"), "room-201-door");
+        graph.ConnectBidirectional(Hallway, new LocationId("security-room"), "security-door", requiresAccess: true);
+        graph.ConnectBidirectional(Hallway, new LocationId("office"), "office-door");
         graph.ConnectBidirectional(
             Hallway,
             BasementScenario.Basement,

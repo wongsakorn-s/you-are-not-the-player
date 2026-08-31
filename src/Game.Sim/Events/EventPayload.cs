@@ -1,3 +1,4 @@
+using Game.Sim.Anomalies;
 using Game.Sim.Entities;
 using Game.Sim.Locations;
 
@@ -147,4 +148,29 @@ public sealed record InformationExchangePayload : EventPayload
     public EntityId Subject { get; }
 
     public EventId RootEventId { get; }
+}
+
+public sealed record RealityAnomalyPayload : EventPayload
+{
+    public RealityAnomalyPayload(
+        AnomalyKind anomaly,
+        string description,
+        EntityId? targetActor = null)
+    {
+        if (!Enum.IsDefined(anomaly))
+        {
+            throw new ArgumentOutOfRangeException(nameof(anomaly), anomaly, "Unknown anomaly kind.");
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        Anomaly = anomaly;
+        Description = description.Trim();
+        TargetActor = targetActor;
+    }
+
+    public AnomalyKind Anomaly { get; }
+
+    public string Description { get; }
+
+    public EntityId? TargetActor { get; }
 }

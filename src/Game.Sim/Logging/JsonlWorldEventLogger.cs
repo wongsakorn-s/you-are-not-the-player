@@ -110,6 +110,15 @@ public sealed class JsonlWorldEventLogger : IWorldEventLogger
                 json.WriteString("subject", information.Subject.Value);
                 json.WriteNumber("rootEventId", information.RootEventId.Value);
                 break;
+            case RealityAnomalyPayload anomaly:
+                json.WriteString("type", "realityAnomaly");
+                json.WriteString("anomaly", anomaly.Anomaly.ToString());
+                json.WriteString("description", anomaly.Description);
+                if (anomaly.TargetActor is not null)
+                {
+                    json.WriteString("targetActor", anomaly.TargetActor.Value.Value);
+                }
+                break;
             default:
                 throw new NotSupportedException(
                     $"Payload type '{payload.GetType().Name}' is not supported by the JSONL logger.");

@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "navigation": {
-    "minimumX": -7.5,
-    "maximumX": 7.5,
-    "minimumZ": -8.0,
-    "maximumZ": 9.0,
+    "minimumX": -8.0,
+    "maximumX": 8.0,
+    "minimumZ": -9.0,
+    "maximumZ": 13.0,
     "height": 0.8
   },
   "locations": [
@@ -52,6 +52,33 @@
       "floorSize": { "x": 10.0, "y": 0.35, "z": 6.0 },
       "color": "412f3f",
       "restricted": true
+    },
+    {
+      "id": "garden",
+      "displayName": "OUTDOOR GARDEN",
+      "marker": { "x": 0.0, "y": 0.8, "z": 10.5 },
+      "floorPosition": { "x": 0.0, "y": -0.2, "z": 10.5 },
+      "floorSize": { "x": 12.0, "y": 0.35, "z": 4.0 },
+      "color": "25442f",
+      "restricted": false
+    },
+    {
+      "id": "security-room",
+      "displayName": "SECURITY CCTV ROOM",
+      "marker": { "x": -5.0, "y": 0.8, "z": -2.5 },
+      "floorPosition": { "x": -5.0, "y": -0.2, "z": -2.5 },
+      "floorSize": { "x": 4.5, "y": 0.35, "z": 4.0 },
+      "color": "2c2e42",
+      "restricted": true
+    },
+    {
+      "id": "office",
+      "displayName": "MANAGER OFFICE",
+      "marker": { "x": 5.0, "y": 0.8, "z": -2.5 },
+      "floorPosition": { "x": 5.0, "y": -0.2, "z": -2.5 },
+      "floorSize": { "x": 4.5, "y": 0.35, "z": 4.0 },
+      "color": "42332c",
+      "restricted": false
     }
   ],
   "portals": [
@@ -59,6 +86,12 @@
       "id": "lobby-arch",
       "from": "lobby",
       "to": "hallway",
+      "requiresAccess": false
+    },
+    {
+      "id": "garden-gate",
+      "from": "lobby",
+      "to": "garden",
       "requiresAccess": false
     },
     {
@@ -71,6 +104,18 @@
       "id": "room-201-door",
       "from": "hallway",
       "to": "room-201",
+      "requiresAccess": false
+    },
+    {
+      "id": "security-door",
+      "from": "hallway",
+      "to": "security-room",
+      "requiresAccess": true
+    },
+    {
+      "id": "office-door",
+      "from": "hallway",
+      "to": "office",
       "requiresAccess": false
     },
     {

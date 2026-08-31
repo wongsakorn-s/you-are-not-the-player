@@ -4,7 +4,9 @@ using System.Text.Json;
 using Game.Sim.Events;
 using Game.Sim.Logging;
 using Game.Sim.Memory;
+using Game.Sim.Routines;
 using Game.Sim.Scenarios;
+using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
 
 const string defaultScenario = "basement";
@@ -15,13 +17,58 @@ try
 {
     RunnerOptions options = ParseArguments(args);
     InMemorySuspicionRuleRepository rules = LoadRules();
-    var scenario = new BasementScenario(rules);
     var runs = new List<SimulationSummary>(options.Repeat);
+
     for (int runIndex = 0; runIndex < options.Repeat; runIndex++)
     {
         ulong runSeed = checked(options.Seed + (ulong)runIndex);
-        BasementScenarioResult result = scenario.Run(
-            new BasementScenarioOptions(runSeed, options.Ticks));
+        BasementScenarioResult result;
+
+        if (!string.IsNullOrEmpty(options.LoadSnapshotPath))
+        {
+            SessionSnapshot snapshot = SessionSnapshotSerializer.LoadFromFile(options.LoadSnapshotPath);
+            BasementScenarioSession session = BasementScenarioSession.FromSnapshot(snapshot, rules, autoCompleteMovements: true);
+            while (!session.IsComplete && session.Now.Tick < options.Ticks)
+            {
+                _ = session.AdvanceOneTick();
+            }
+
+            if (!string.IsNullOrEmpty(options.SaveSnapshotPath))
+            {
+                SessionSnapshot snapshotToSave = session.CaptureSnapshot();
+                SessionSnapshotSerializer.SaveToFile(
+                    snapshotToSave,
+                    ResolveTracePath(options.SaveSnapshotPath, runIndex, options.Repeat));
+            }
+
+            result = session.BuildResult();
+        }
+        else
+        {
+            var scenarioOptions = new BasementScenarioOptions(runSeed, options.Ticks);
+            result = options.Scenario.ToLowerInvariant() switch
+            {
+                "rumor-cascade" => new RumorCascadeScenario(rules).Run(scenarioOptions),
+                "deceptive-alibi" => new DeceptiveAlibiScenario(rules).Run(scenarioOptions),
+                "reality-breach" => new RealityBreachScenario(rules).Run(scenarioOptions),
+                _ => new BasementScenario(rules).Run(scenarioOptions),
+            };
+
+            if (!string.IsNullOrEmpty(options.SaveSnapshotPath))
+            {
+                BasementScenarioSession session = new BasementScenario(rules).CreateSession(scenarioOptions, autoCompleteMovements: true);
+                while (!session.IsComplete && session.Now.Tick < options.Ticks)
+                {
+                    _ = session.AdvanceOneTick();
+                }
+
+                SessionSnapshot snapshotToSave = session.CaptureSnapshot();
+                SessionSnapshotSerializer.SaveToFile(
+                    snapshotToSave,
+                    ResolveTracePath(options.SaveSnapshotPath, runIndex, options.Repeat));
+            }
+        }
+
         string? tracePath = options.TracePath is null
             ? null
             : WriteTrace(ResolveTracePath(options.TracePath, runIndex, options.Repeat), result.Events);
@@ -40,8 +87,9 @@ catch (Exception exception) when (
     Console.Error.WriteLine(exception.Message);
     Console.Error.WriteLine(
         "Usage: dotnet run --project tools/SimRunner -- " +
-        "[--scenario basement] [--seed <ulong>] [--ticks <int>=4>] " +
-        "[--repeat <positive-int>] [--trace <jsonl-path>]");
+        "[--scenario basement|rumor-cascade|deceptive-alibi|reality-breach] " +
+        "[--seed <ulong>] [--ticks <int>=4>] [--repeat <positive-int>] " +
+        "[--trace <jsonl-path>] [--save-snapshot <json-path>] [--load-snapshot <json-path>]");
     return 2;
 }
 
@@ -52,6 +100,8 @@ static RunnerOptions ParseArguments(string[] arguments)
     int ticks = defaultTicks;
     int repeat = 1;
     string? tracePath = null;
+    string? saveSnapshotPath = null;
+    string? loadSnapshotPath = null;
 
     for (int index = 0; index < arguments.Length; index += 2)
     {
@@ -64,11 +114,17 @@ static RunnerOptions ParseArguments(string[] arguments)
         string value = arguments[index + 1];
         switch (option)
         {
-            case "--scenario" when string.Equals(
-                value,
-                defaultScenario,
-                StringComparison.OrdinalIgnoreCase):
-                scenario = defaultScenario;
+            case "--scenario" when string.Equals(value, "basement", StringComparison.OrdinalIgnoreCase):
+                scenario = "basement";
+                break;
+            case "--scenario" when string.Equals(value, "rumor-cascade", StringComparison.OrdinalIgnoreCase):
+                scenario = "rumor-cascade";
+                break;
+            case "--scenario" when string.Equals(value, "deceptive-alibi", StringComparison.OrdinalIgnoreCase):
+                scenario = "deceptive-alibi";
+                break;
+            case "--scenario" when string.Equals(value, "reality-breach", StringComparison.OrdinalIgnoreCase):
+                scenario = "reality-breach";
                 break;
             case "--seed" when ulong.TryParse(
                 value,
@@ -94,6 +150,12 @@ static RunnerOptions ParseArguments(string[] arguments)
             case "--trace" when !string.IsNullOrWhiteSpace(value):
                 tracePath = value.Trim();
                 break;
+            case "--save-snapshot" when !string.IsNullOrWhiteSpace(value):
+                saveSnapshotPath = value.Trim();
+                break;
+            case "--load-snapshot" when !string.IsNullOrWhiteSpace(value):
+                loadSnapshotPath = value.Trim();
+                break;
             default:
                 throw new ArgumentException($"Invalid option or value: '{option} {value}'.");
         }
@@ -110,7 +172,14 @@ static RunnerOptions ParseArguments(string[] arguments)
             "A repeated run trace path must contain the '{run}' filename placeholder.");
     }
 
-    return new RunnerOptions(scenario, seed, ticks, repeat, tracePath);
+    return new RunnerOptions(
+        scenario,
+        seed,
+        ticks,
+        repeat,
+        tracePath,
+        saveSnapshotPath,
+        loadSnapshotPath);
 }
 
 static InMemorySuspicionRuleRepository LoadRules()
@@ -151,43 +220,14 @@ static SimulationSummary CreateSummary(
     BasementScenarioResult result,
     string? tracePath)
 {
-    IReadOnlyDictionary<string, int> eventTypes = result.Events
-        .GroupBy(worldEvent => worldEvent.Type.ToString(), StringComparer.Ordinal)
-        .OrderBy(group => group.Key, StringComparer.Ordinal)
+    var eventCounts = result.Events
+        .GroupBy(worldEvent => worldEvent.Type.ToString())
         .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-    IReadOnlyDictionary<string, int> goals = result.Decisions
-        .GroupBy(decision => decision.Goal.Type.ToString(), StringComparer.Ordinal)
-        .OrderBy(group => group.Key, StringComparer.Ordinal)
+    var goalCounts = result.Decisions
+        .GroupBy(decision => decision.Goal.Type.ToString())
         .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
-    int episodicMemories = result.Memories.Count(item => item.Memory.Kind == MemoryKind.Episodic);
-    int socialMemories = result.Memories.Count(item => item.Memory.Kind == MemoryKind.Social);
-
-    var metrics = new SimulationMetrics(
-        result.Actors.Count,
-        result.Events.Count,
-        eventTypes,
-        result.ObservationCount,
-        result.Memories.Count,
-        episodicMemories,
-        socialMemories,
-        result.Decisions.Count,
-        goals);
-    var milestone = new BasementMilestone(
-        result.RestrictedEntry.Id.Value,
-        result.BobRumor.RootEventId.Value,
-        result.BobRumor.InformationSource?.Value,
-        result.AnnaFirstSuspicionAt.Tick,
-        result.BobFirstSuspicionAt.Tick,
-        FormatDecision(result.AnnaInitialDecision),
-        FormatDecision(result.BobInitialDecision),
-        result.Events.Any(worldEvent =>
-            worldEvent.Type == EventType.ShareInformation &&
-            worldEvent.Actor == BasementScenario.Anna &&
-            worldEvent.Target == BasementScenario.Bob),
-        result.Events.Any(worldEvent =>
-            worldEvent.Type == EventType.EnterLocation &&
-            worldEvent.Actor == BasementScenario.Bob &&
-            worldEvent.Location == BasementScenario.Basement));
+    int episodic = result.Memories.Count(memory => memory.Memory.Kind == MemoryKind.Episodic);
+    int social = result.Memories.Count(memory => memory.Memory.Kind == MemoryKind.Social);
 
     return new SimulationSummary(
         scenario,
@@ -195,11 +235,29 @@ static SimulationSummary CreateSummary(
         result.CompletedAt.Tick,
         WorldEventTrace.ComputeSha256(result.Events),
         tracePath,
-        metrics,
-        milestone,
+        new SimulationMetrics(
+            result.Actors.Count,
+            result.Events.Count,
+            eventCounts,
+            result.ObservationCount,
+            result.Memories.Count,
+            episodic,
+            social,
+            result.Decisions.Count,
+            goalCounts),
+        new BasementMilestone(
+            result.RestrictedEntry.Id.Value,
+            result.BobRumor.RootEventId.Value,
+            result.BobRumor.InformationSource?.Value,
+            result.AnnaFirstSuspicionAt.Tick,
+            result.BobFirstSuspicionAt.Tick,
+            CreateDecisionSummary(result.AnnaInitialDecision),
+            CreateDecisionSummary(result.BobInitialDecision),
+            result.Events.Any(e => e.Actor == BasementScenario.Anna && e.Type == EventType.ShareInformation),
+            result.Events.Any(e => e.Actor == BasementScenario.Bob && e.Type == EventType.EnterLocation && e.Location == BasementScenario.Basement)),
         new SuspicionSummary(
-            ToScores(result.AnnaSuspicion.Vector),
-            ToScores(result.BobSuspicion.Vector)),
+            CreateSuspicionScores(result.AnnaSuspicion.Vector),
+            CreateSuspicionScores(result.BobSuspicion.Vector)),
         new FinalLocations(
             result.AnnaFinalLocation.Value,
             result.BobFinalLocation.Value,
@@ -210,26 +268,32 @@ static BatchSimulationSummary CreateBatchSummary(
     RunnerOptions options,
     IReadOnlyList<SimulationSummary> runs)
 {
-    SimulationSummary first = runs[0];
-    SimulationSummary last = runs[^1];
+    HashSet<string> uniqueFingerprints = runs
+        .Select(run => run.EventFingerprint)
+        .ToHashSet(StringComparer.Ordinal);
+    double averageTicks = runs.Average(run => (double)run.CompletedTicks);
+    double averageEvents = runs.Average(run => (double)run.Metrics.WorldEvents);
+    double averageObservations = runs.Average(run => (double)run.Metrics.Observations);
+    double averageDecisions = runs.Average(run => (double)run.Metrics.Decisions);
+    double averageAnnaSuspicionTicks = runs.Average(run => (double)run.Milestone.AnnaFirstSuspicionTick);
+    double averageBobSuspicionTicks = runs.Average(run => (double)run.Milestone.BobFirstSuspicionTick);
+
     return new BatchSimulationSummary(
         options.Scenario,
         options.Seed,
-        options.Ticks,
         runs.Count,
-        options.TracePath,
-        new BatchMetrics(
-            runs.Select(run => run.EventFingerprint).Distinct(StringComparer.Ordinal).Count(),
-            runs.Min(run => run.Metrics.WorldEvents),
-            runs.Max(run => run.Metrics.WorldEvents),
-            runs.Average(run => run.Metrics.WorldEvents),
-            runs.Average(run => run.Metrics.Observations),
-            runs.Average(run => run.Metrics.Memories)),
-        first,
-        last);
+        uniqueFingerprints.Count,
+        uniqueFingerprints.Count == 1,
+        averageTicks,
+        averageEvents,
+        averageObservations,
+        averageDecisions,
+        averageAnnaSuspicionTicks,
+        averageBobSuspicionTicks,
+        runs);
 }
 
-static DecisionSummary FormatDecision(Game.Sim.Routines.NpcRoutineDecision decision) =>
+static DecisionSummary CreateDecisionSummary(NpcRoutineDecision decision) =>
     new(
         decision.Time.Tick,
         decision.Entity.Value,
@@ -240,7 +304,7 @@ static DecisionSummary FormatDecision(Game.Sim.Routines.NpcRoutineDecision decis
         decision.Goal.TotalUtility,
         decision.Moved);
 
-static SuspicionScores ToScores(SuspicionVector vector) =>
+static SuspicionScores CreateSuspicionScores(SuspicionVector vector) =>
     new(
         vector.Criminality,
         vector.Secrecy,
@@ -254,25 +318,23 @@ internal sealed record RunnerOptions(
     ulong Seed,
     int Ticks,
     int Repeat,
-    string? TracePath);
+    string? TracePath,
+    string? SaveSnapshotPath,
+    string? LoadSnapshotPath);
 
 internal sealed record BatchSimulationSummary(
     string Scenario,
-    ulong InitialSeed,
-    int TicksPerRun,
-    int Runs,
-    string? TracePathPattern,
-    BatchMetrics Aggregate,
-    SimulationSummary FirstRun,
-    SimulationSummary LastRun);
-
-internal sealed record BatchMetrics(
-    int UniqueEventFingerprints,
-    int MinimumWorldEvents,
-    int MaximumWorldEvents,
+    ulong StartSeed,
+    int TotalRuns,
+    int UniqueFingerprints,
+    bool DeterministicAcrossSeeds,
+    double AverageCompletedTicks,
     double AverageWorldEvents,
     double AverageObservations,
-    double AverageMemories);
+    double AverageDecisions,
+    double AverageAnnaFirstSuspicionTick,
+    double AverageBobFirstSuspicionTick,
+    IReadOnlyList<SimulationSummary> Runs);
 
 internal sealed record SimulationSummary(
     string Scenario,

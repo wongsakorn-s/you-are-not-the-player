@@ -32,6 +32,12 @@ public sealed class LocationGraph
         AddDirected(new LocationConnection(second, first, portalId, requiresAccess));
     }
 
+    public IReadOnlyList<LocationConnection> GetConnections(LocationId origin)
+    {
+        EnsureKnown(origin);
+        return _connections[origin].AsReadOnly();
+    }
+
     public LocationRoute? FindRoute(LocationId origin, LocationId destination)
     {
         EnsureKnown(origin);

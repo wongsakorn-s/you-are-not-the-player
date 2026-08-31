@@ -138,6 +138,44 @@ public sealed class MemoryRecord
             sourceMemory.BehaviorPattern);
     }
 
+    public static MemoryRecord Restore(
+        MemoryId id,
+        MemoryKind kind,
+        EntityId? subject,
+        EventType eventType,
+        LocationId? location,
+        IEnumerable<EventTag> tags,
+        SimTime eventTime,
+        SimTime createdAt,
+        float initialConfidence,
+        float salience,
+        EntityId? informationSource,
+        EventId rootEventId,
+        ObservationId? sourceObservationId = null,
+        MemoryId? sourceMemoryId = null,
+        BehaviorPatternKind? behaviorPattern = null)
+    {
+        ValidateId(id);
+        ValidateUnitInterval(initialConfidence, nameof(initialConfidence));
+        ValidateUnitInterval(salience, nameof(salience));
+        return new MemoryRecord(
+            id,
+            kind,
+            subject,
+            eventType,
+            location,
+            tags,
+            eventTime,
+            createdAt,
+            initialConfidence,
+            salience,
+            informationSource,
+            rootEventId,
+            sourceObservationId,
+            sourceMemoryId,
+            behaviorPattern);
+    }
+
     private static void ValidateId(MemoryId id)
     {
         if (id.IsEmpty)

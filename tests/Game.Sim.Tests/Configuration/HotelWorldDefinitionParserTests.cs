@@ -6,7 +6,7 @@ namespace Game.Sim.Tests.Configuration;
 public sealed class HotelWorldDefinitionParserTests
 {
     [Fact]
-    public void ProductionDefinition_ContainsFiveRoomConnectedHotelGraph()
+    public void ProductionDefinition_ContainsExpandedConnectedHotelGraph()
     {
         string path = Path.Combine(
             AppContext.BaseDirectory,
@@ -19,7 +19,7 @@ public sealed class HotelWorldDefinitionParserTests
             new LocationId("kitchen"),
             new LocationId("basement"));
 
-        Assert.Equal(5, hotel.Locations.Length);
+        Assert.Equal(8, hotel.Locations.Length);
         Assert.NotNull(route);
         Assert.Equal(
             ["kitchen", "hallway", "basement"],

@@ -22,6 +22,10 @@ public sealed class GodotWorldAdapter
     public IReadOnlyDictionary<EntityId, LocationId> ConfirmedLocations =>
         _transitions.ConfirmedLocations;
 
+    public IReadOnlyDictionary<LocationId, Vector3> LocationMarkers => _locationMarkers;
+
+    public NpcActorNode? GetActorView(EntityId actor) => _actorViews.GetValueOrDefault(actor);
+
     public void RegisterLocation(
         LocationId location,
         Vector3 worldPosition,

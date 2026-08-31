@@ -15,18 +15,21 @@ public sealed class JsonSuspicionRuleParserTests
             "mvp.json");
         string json = File.ReadAllText(path);
         InMemorySuspicionRuleRepository repository = JsonSuspicionRuleParser.Parse(json);
-        SuspicionRule rule = repository.Rules[4];
+        SuspicionRule rule = repository.Rules[6];
 
-        Assert.Equal(8, repository.Rules.Count);
+        Assert.Equal(11, repository.Rules.Count);
         Assert.Equal(
             [
                 "detected_boundary_testing",
                 "detected_loot_sweep",
                 "detected_repeat_interaction",
                 "detected_role_neglect",
+                "detected_save_reload_anomaly",
+                "detected_the_blink_anomaly",
                 "restricted_area_entry",
                 "witnessed_night_activity",
                 "witnessed_secret_meeting",
+                "witnessed_suspicious_tampering",
                 "witnessed_theft",
             ],
             repository.Rules.Select(item => item.Id));

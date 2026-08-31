@@ -1,29 +1,27 @@
 # System-First Development Plan — NPC Reality Deduction Game
 
-> เวอร์ชันเอกสาร: 0.1  
-> วันที่: 2026-08-30  
-> เป้าหมาย: สร้างเกมต้นแบบที่พิสูจน์ระบบ NPC / Event / Memory / Suspicion ให้สนุกก่อนลงทุนกับ UI, art และ content จำนวนมาก
+> เวอร์ชันเอกสาร: 0.6
+> วันที่: 2026-09-01
+> เป้าหมาย: สร้างเกมต้นแบบที่พิสูจน์ระบบ NPC / Event / Memory / Suspicion / Reality Anomalies / Conspiracy / 3D Presentation ให้สนุกก่อนลงทุนกับ UI, art และ content จำนวนมาก
 
 ---
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง The Basement Test เสร็จแล้ว โดยมี Pure C# simulation,
-deterministic simulation clock, seeded PCG32 random, strongly typed IDs,
-Entity/Location model, WorldState, immutable WorldEvent, deterministic event buffer,
-atomic MoveEntity action, deterministic JSONL event logger, xUnit tests,
-logical-location topology, visual/audio Observation, Episodic/Social MemoryStore,
-RootEventId rumor lineage, confidence decay, data-driven SuspicionRule,
-EvidenceContribution, SuspicionVector, daily Schedule, Needs, role permissions,
-deterministic Utility-based NPC Brain, Secret Plan สำหรับ theft/secret meeting/night owl,
-belief-driven goals สำหรับ observe/follow/ask/share/avoid,
-rule-based detector สำหรับ LootSweep/RepeatInteraction/RoleNeglect/BoundaryTesting,
-Player AI archetypes แบบ Explorer/Completionist/Roleplayer, headless SimRunner,
-information exchange ที่รักษา rumor lineage, autonomous suspicion feedback loop,
-Godot 4.7.2 .NET adapter พร้อม Hotel slice 6 actors/5 locations, NavigationAgent3D,
-data-driven topology, restricted door, live movement lifecycle,
-incremental real-time simulation session, requested/confirmed location tracking,
-debug HUD และ GitHub Actions CI
+Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
+
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, seeded PCG32 random, strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 155/155 xUnit automated tests.
+- **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
+- **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
+- **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
+- **Save-Load Session Snapshot System:** ถ่ายทอดและกู้คืนสถานะโลกจำลองทั้งหมดผ่าน Pure JSON พร้อมฟังก์ชัน QuickSave (`F6`) / QuickLoad (`F7`) ใน Godot Client และ SimRunner CLI flags (`--save-snapshot` / `--load-snapshot`) โดยรับประกันความถูกต้อง 100% Deterministic Parity.
+- **Hotel Content & Encounters Expansion:** แผนที่โรงแรมขยายเป็น 8 ห้อง (*Lobby, Hallway, Kitchen, Room 201, Basement, Garden, Security Room, Manager Office*), ระบบวัตถุ Interactive Objects (เซฟ, สมุดทะเบียนแขก, สมุดบัญชีลับ, ตู้ไฟ, กุญแจ) พร้อมปุ่มสำรวจและงัดแงะ (`O`).
+- **Dialogue & Clue Inquiry Expansion:** ระบบสอบถามเบาะแสเฉพาะวัตถุ (`InquireAboutObject`) และการนำหลักฐานไปเผชิญหน้า (`ConfrontEvidence`) ผ่านปุ่ม **`Y`**.
+- **Reality Anomalies & Meta-Suspicion System (The Core Concept):** ตรวจจับความผิดปกติของมิติเวลา เช่น การโหลดเซฟ (SaveReload Déjà Vu) และการเคลื่อนที่ฉับพลัน (The Blink Fast Travel) เพื่อกระตุ้นค่าความสงสัยในมิติ `ImpossibleBehavior` และ `MetaBehavior` ต่อ The Player.
+- **NPC Collective Conspiracy & Climax Accusation System:** ระบบรวมกลุ่มพันธมิตร NPC (`AccusationCoalition`), การสะสมหลักฐานจนเกิดมติเอกฉันท์ (`ConsensusReached`), การเรียกประชุมชี้ตัวใน Lobby, และทางเลือกของผู้เล่นสู่ฉากจบ (`Z` Confess, `X` Deny, `C` Flee).
+- **Multi-Scenario Headless Stress Testing Suite:** ชุดทดสอบ 4 Scenarios บน SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`) พร้อมระบบคำนวณ SHA-256 Event Fingerprint และ JSONL Traces.
+- **Godot 3D World Feedback & In-World UI:** ระบบแสดงผล 3D Emotion Bubbles เหนือศีรษะ NPC (`🎮 PLAYER`, `⚡ DÉJÀ VU`, `👥 COALITION`, `❓ SUSPICIOUS`), 3D Interactive Object Nodes พร้อมป้าย 3D Label ลอยระบุสถานะปลดล็อก/งัดแงะในทั้ง 8 ห้องของโรงแรมแบบ Real-time.
+- **Spatial Audio & 3D Sensory Acoustics:** ระบบเสียง 3D Procedural PCM Synthesis (Footsteps, Safe Lock Clicks, Registry Paper, Fusebox Buzz, Anomaly Warp, Climax Dramatic Chords) ทำงานแบบ Zero External Asset Dependencies.
 
 คำสั่งตรวจสอบระบบ:
 
@@ -32,11 +30,14 @@ dotnet restore Game.sln
 dotnet build Game.sln --configuration Release --no-restore
 dotnet test Game.sln --configuration Release --no-build
 dotnet run --project tools/SimRunner -- --scenario basement --seed 481516 --ticks 16
+dotnet run --project tools/SimRunner -- --scenario rumor-cascade --seed 481516 --ticks 16
+dotnet run --project tools/SimRunner -- --scenario deceptive-alibi --seed 481516 --ticks 16
+dotnet run --project tools/SimRunner -- --scenario reality-breach --seed 481516 --ticks 16
 ```
 
 Basement scenario รันผ่าน headless SimRunner พร้อม structured summary, JSONL trace,
-metrics และ SHA-256 event fingerprint ส่วน Godot รัน NPC Brain/session ทีละ tick โดยตรง
-และ commit logical location หลัง NavigationAgent3D เดินถึงจริง ไม่มี precomputed movement replay
+metrics และ SHA-256 event fingerprint (`9a5605575c7970a907aa649f19f645181c3db30f88fd8746c27201e1846acbb9`)
+ส่วน Godot รัน NPC Brain/session ทีละ tick โดยตรง และ commit logical location หลัง NavigationAgent3D เดินถึงจริง
 
 เปิด Godot prototype:
 
@@ -508,7 +509,7 @@ New Action
 **Data:** JSON + strongly typed C# definitions  
 **Logging:** JSONL / structured event log  
 **Version Control:** Git  
-**CI:** GitHub Actions สำหรับ `dotnet test`  
+**Quality Gate:** ตรวจในเครื่องด้วย `dotnet build`, `dotnet test` และ `dotnet format`; ปัจจุบันยังไม่ได้ตั้งค่า CI workflow
 **Target แรก:** Desktop — Windows/Linux/macOS
 
 แนวทางสำคัญคือ:
@@ -613,7 +614,7 @@ Godot 4 + C# ยังไม่เหมาะถ้าเป้าหมาย�
 | Log | JSONL | stream ได้, grep ง่าย, วิเคราะห์ภายหลังง่าย |
 | Source Control | Git | standard |
 | Binary Asset | Git LFS เฉพาะเมื่อจำเป็น | อย่าเอา source/data เข้า LFS |
-| CI | GitHub Actions | run test ทุก push/PR |
+| Quality Gate | Local .NET CLI | build, test และตรวจ format ก่อน commit; ยังไม่ได้ตั้งค่า CI workflow |
 | IDE | Rider / Visual Studio / VS Code | ใช้ C# tooling ภายนอก Godot |
 | Database | ยังไม่ใช้ | ไม่จำเป็นใน MVP |
 | LLM | ยังไม่ใช้ | ป้องกัน non-determinism และ scope creep |
@@ -2383,9 +2384,9 @@ async ใช้ได้ใน:
 
 ---
 
-# 30. Definition of Done ของ System Foundation
+# 30. Definition of Done ของ System Foundation & Post-MVP
 
-Foundation ถือว่าพร้อมเมื่อ:
+Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์แล้ว:
 
 - [x] Core simulation ไม่มี dependency ต่อ Godot
 - [x] ทุก random ผ่าน seeded RNG
@@ -2397,25 +2398,34 @@ Foundation ถือว่าพร้อมเมื่อ:
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Determinism test ผ่าน
+- [x] Determinism test ผ่าน (155/155 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
 - [x] Live movement commit logical location หลัง physical arrival
-- [x] Hotel topology/marker/portal/door เป็น data-driven
+- [x] Hotel topology/marker/portal/door เป็น data-driven (ขยายเป็น 8 ห้อง)
 - [x] NPC Brain รันแบบ incremental และรอ physical acknowledgement
 - [x] Godot ไม่ใช้ precomputed movement event เป็นตัวขับ actor แล้ว
-- [x] ยังไม่มี gameplay system ที่ต้องพึ่ง UI ใหญ่
+- [x] Player Agency & Possess System (`P` Possess, `1-8` Move, `T` Talk, `J` Journal)
+- [x] Save-Load Session Snapshot System (100% Deterministic Parity, `F6` Save / `F7` Load)
+- [x] Interactive Objects & Clue Discovery (`O` Inspect/Tamper, Safe/Keys/Ledger)
+- [x] Dialogue & Clue Inquiry (`Y` Inquire Object / Confront Evidence)
+- [x] Reality Anomalies & Meta-Suspicion (SaveReload Déjà Vu & The Blink Fast Travel)
+- [x] NPC Coalition & Climax Resolution (`Z` Confess, `X` Deny, `C` Flee)
+- [x] Multi-Scenario SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`)
+- [x] Godot Spatial Audio และ Procedural Sound Effects
 
 ---
 
 # 31. Recommended Immediate Goal
 
-สถานะ: Roadmap ระบบต้นแบบ Phase 0–15 เสร็จครบแล้ว
+สถานะ: Roadmap Phase 0–15 และ Post-MVP 1–5 เสร็จสมบูรณ์แล้ว
 
-เป้าหมายถัดไปควรกำหนดเป็น Post-MVP จาก playtest จริง โดยลำดับที่แนะนำคือ
-player agency/interaction loop, save-load session snapshot, content authoring tools
-และเพิ่ม hotel encounters มากกว่าการขยายระบบ AI ใหม่ทันที
+เป้าหมายถัดไปที่แนะนำ:
+
+1. **Playable Vertical Slice Stabilization:** ทดสอบ Godot แบบ headless และแบบเล่นจริงให้ครบตั้งแต่เริ่มเกม สำรวจ สืบสวน ไปจนถึงฉากจบ พร้อมปรับ onboarding และ feedback ของปุ่มควบคุม
+2. **Balance & Telemetry:** เก็บ metric จากหลาย seed เพื่อปรับ suspicion threshold, rumor propagation, coalition timing และความถี่ของ anomaly ให้เกิดความตึงเครียดอย่างสม่ำเสมอ
+3. **Data-Driven Content Pipeline:** ย้ายบทสนทนา encounter และผลลัพธ์ anomaly ที่ยัง hard-code ไปเป็นข้อมูลภายนอก เพื่อเพิ่มเนื้อหาโดยไม่ต้องแก้ simulation core
 
 ---
 

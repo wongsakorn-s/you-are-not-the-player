@@ -18,6 +18,27 @@ public sealed class SuspicionSystem
         _rules = rules;
     }
 
+    public IReadOnlyList<SuspicionCase> GetAllCases() => _cases.Values
+        .OrderBy(c => c.Observer.Value, StringComparer.Ordinal)
+        .ThenBy(c => c.Subject.Value, StringComparer.Ordinal)
+        .ToArray();
+
+    public void LoadCase(EntityId observer, EntityId subject, IEnumerable<EvidenceContribution> contributions)
+    {
+        ArgumentNullException.ThrowIfNull(contributions);
+        var key = new CaseKey(observer, subject);
+        if (!_cases.TryGetValue(key, out SuspicionCase? suspicionCase))
+        {
+            suspicionCase = new SuspicionCase(observer, subject);
+            _cases.Add(key, suspicionCase);
+        }
+
+        foreach (EvidenceContribution contribution in contributions)
+        {
+            suspicionCase.Add(contribution);
+        }
+    }
+
     public int ProcessMemory(EntityId observer, MemoryRecord memory)
     {
         ArgumentNullException.ThrowIfNull(memory);

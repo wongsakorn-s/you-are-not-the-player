@@ -39,6 +39,17 @@ public sealed class MemorySystem
         return store;
     }
 
+    public IReadOnlyList<MemoryStore> GetAllStores() => _stores.Values
+        .OrderBy(store => store.Owner.Value, StringComparer.Ordinal)
+        .ToArray();
+
+    public void LoadMemory(EntityId owner, MemoryRecord memory)
+    {
+        ArgumentNullException.ThrowIfNull(memory);
+        MemoryStore store = GetStore(owner);
+        store.Add(memory);
+    }
+
     public MemoryRecord? Remember(Observation observation)
     {
         ArgumentNullException.ThrowIfNull(observation);

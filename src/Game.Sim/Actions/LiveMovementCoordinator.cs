@@ -135,6 +135,15 @@ public sealed class LiveMovementCoordinator
             ? session.Snapshot()
             : throw new KeyNotFoundException($"Movement request '{requestId}' does not exist.");
 
+    public bool HasActiveRequest(EntityId actor) =>
+        _activeByActor.ContainsKey(actor);
+
+    public MovementSnapshot? GetActiveRequest(EntityId actor) =>
+        _activeByActor.TryGetValue(actor, out MovementRequestId requestId) &&
+        _sessions.TryGetValue(requestId, out MovementSession? session)
+            ? session.Snapshot()
+            : null;
+
     private bool HasRouteAccess(MovementSession session) =>
         session.Route is not null &&
         session.Route.Connections.All(connection => _access.CanTraverse(session.Actor, connection));
