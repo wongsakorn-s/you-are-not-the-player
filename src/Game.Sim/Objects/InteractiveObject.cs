@@ -67,4 +67,10 @@ public sealed class InteractiveObject
     }
 
     public void MarkTampered() => IsTampered = true;
+
+    internal void RestoreState(bool isLocked, bool isTampered)
+    {
+        IsLocked = isLocked;
+        IsTampered = isTampered;
+    }
 }

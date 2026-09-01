@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, seeded PCG32 random, strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 155/155 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, seeded PCG32 random, strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 160/160 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -20,8 +20,8 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **Reality Anomalies & Meta-Suspicion System (The Core Concept):** ตรวจจับความผิดปกติของมิติเวลา เช่น การโหลดเซฟ (SaveReload Déjà Vu) และการเคลื่อนที่ฉับพลัน (The Blink Fast Travel) เพื่อกระตุ้นค่าความสงสัยในมิติ `ImpossibleBehavior` และ `MetaBehavior` ต่อ The Player.
 - **NPC Collective Conspiracy & Climax Accusation System:** ระบบรวมกลุ่มพันธมิตร NPC (`AccusationCoalition`), การสะสมหลักฐานจนเกิดมติเอกฉันท์ (`ConsensusReached`), การเรียกประชุมชี้ตัวใน Lobby, และทางเลือกของผู้เล่นสู่ฉากจบ (`Z` Confess, `X` Deny, `C` Flee).
 - **Multi-Scenario Headless Stress Testing Suite:** ชุดทดสอบ 4 Scenarios บน SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`) พร้อมระบบคำนวณ SHA-256 Event Fingerprint และ JSONL Traces.
-- **Godot 3D World Feedback & In-World UI:** ระบบแสดงผล 3D Emotion Bubbles เหนือศีรษะ NPC (`🎮 PLAYER`, `⚡ DÉJÀ VU`, `👥 COALITION`, `❓ SUSPICIOUS`), 3D Interactive Object Nodes พร้อมป้าย 3D Label ลอยระบุสถานะปลดล็อก/งัดแงะในทั้ง 8 ห้องของโรงแรมแบบ Real-time.
-- **Spatial Audio & 3D Sensory Acoustics:** ระบบเสียง 3D Procedural PCM Synthesis (Footsteps, Safe Lock Clicks, Registry Paper, Fusebox Buzz, Anomaly Warp, Climax Dramatic Chords) ทำงานแบบ Zero External Asset Dependencies.
+- **Godot Minimal Presentation:** คงเฉพาะพื้นที่โรงแรม ตัวละคร Navigation และ HUD ที่จำเป็นต่อการทดสอบ gameplay loop; ปิด 3D Emotion Bubbles และ 3D Interactive Object Nodes ชั่วคราวระหว่างปรับเสถียรภาพ.
+- **Audio Status:** ถอด procedural/spatial audio ออกจาก runtime ชั่วคราว จนกว่าจะยืนยัน frame pacing ของ gameplay loop หลักได้แล้ว.
 
 คำสั่งตรวจสอบระบบ:
 
@@ -42,14 +42,18 @@ metrics และ SHA-256 event fingerprint (`9a5605575c7970a907aa649f19f645181c
 เปิด Godot prototype:
 
 ```bash
+winget install --id GodotEngine.GodotEngine.Mono --exact --version 4.7.2 --scope user
 godot --editor --path src/Game.Client.Godot
 ```
 
-ตรวจ scene แบบ headless เมื่อมี Godot 4.7.2 .NET ใน PATH:
+หลังติดตั้งครั้งแรกให้เปิด terminal ใหม่ แล้วตรวจ playable loop แบบ headless:
 
 ```bash
-godot --headless --path src/Game.Client.Godot --quit-after 2600
+godot_console --headless --path src/Game.Client.Godot --fixed-fps 60 --quit-after 4000 -- --smoke-playthrough
 ```
+
+การทดสอบสำเร็จเมื่อ process คืน exit code `0` และแสดง `PLAYABLE_LOOP_SMOKE_PASS` โดยครอบคลุม
+physical navigation, object interaction, coalition confrontation, climax resolution และ QuickSave/QuickLoad
 
 ---
 
@@ -2398,7 +2402,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Determinism test ผ่าน (155/155 tests passed)
+- [x] Determinism test ผ่าน (160/160 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2413,19 +2417,33 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Reality Anomalies & Meta-Suspicion (SaveReload Déjà Vu & The Blink Fast Travel)
 - [x] NPC Coalition & Climax Resolution (`Z` Confess, `X` Deny, `C` Flee)
 - [x] Multi-Scenario SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`)
-- [x] Godot Spatial Audio และ Procedural Sound Effects
+- [x] Godot minimal presentation สำหรับทดสอบ hotel navigation, HUD และ gameplay loop
 
 ---
 
 # 31. Recommended Immediate Goal
 
-สถานะ: Roadmap Phase 0–15 และ Post-MVP 1–5 เสร็จสมบูรณ์แล้ว
+สถานะ: Roadmap Phase 0–15 และ Post-MVP 1–5 เสร็จสมบูรณ์แล้ว ปัจจุบันอยู่ในช่วง Playable Vertical Slice Stabilization
 
-เป้าหมายถัดไปที่แนะนำ:
+ลำดับงานถัดไป:
 
-1. **Playable Vertical Slice Stabilization:** ทดสอบ Godot แบบ headless และแบบเล่นจริงให้ครบตั้งแต่เริ่มเกม สำรวจ สืบสวน ไปจนถึงฉากจบ พร้อมปรับ onboarding และ feedback ของปุ่มควบคุม
-2. **Balance & Telemetry:** เก็บ metric จากหลาย seed เพื่อปรับ suspicion threshold, rumor propagation, coalition timing และความถี่ของ anomaly ให้เกิดความตึงเครียดอย่างสม่ำเสมอ
-3. **Data-Driven Content Pipeline:** ย้ายบทสนทนา encounter และผลลัพธ์ anomaly ที่ยัง hard-code ไปเป็นข้อมูลภายนอก เพื่อเพิ่มเนื้อหาโดยไม่ต้องแก้ simulation core
+1. **Stage A — Minimal Frame-Pacing Playtest (กำลังดำเนินการ):** เล่นเส้นทางเต็มด้วยโรงแรม ตัวละคร Navigation และ HUD โดยยังไม่นำ advanced visual/audio กลับมา พร้อมบันทึก FPS และอาการกระตุก
+2. **Stage B — Runtime Profiling:** หากยังพบอาการกระตุก ให้แยกวัด simulation tick, Navigation, HUD refresh และ rendering เพื่อแก้ที่ root cause
+3. **Stage C — Balance & Telemetry:** เก็บ metric จากหลาย seed เพื่อปรับ suspicion threshold, rumor propagation, coalition timing และความถี่ของ anomaly
+4. **Stage D — Data-Driven Content Pipeline:** ย้ายบทสนทนา encounter และผลลัพธ์ anomaly ที่ยัง hard-code ไปเป็นข้อมูลภายนอก
+5. **Stage E — Presentation Reintroduction:** นำ visual/audio กลับทีละระบบ พร้อม performance budget และ regression playtest ก่อนเปิดใช้งานจริง
+
+ความคืบหน้า Playable Vertical Slice Stabilization:
+
+- [x] เพิ่ม objective/action feedback บน HUD และแก้แถบ Help ให้แสดงจริง
+- [x] บังคับลำดับ Coalition Consensus → Confrontation → Climax พร้อมป้องกัน event/ending ซ้ำ
+- [x] เพิ่ม snapshot validation และ atomic QuickSave พร้อม error feedback เมื่อไฟล์เสียหรือเข้าถึงไม่ได้
+- [x] QuickLoad รักษาสถานะ Interactive Objects, Coalition, Ending และตัวละครที่ Player กำลังควบคุม
+- [x] ติดตั้ง Godot 4.7.2 .NET และรัน automated headless playable-loop smoke test ผ่านโดยไม่มี runtime error/resource leak
+- [x] เปิด physics interpolation สำหรับจอ refresh rate สูง, reset interpolation หลัง teleport และแสดง FPS/physics rate บน HUD
+- [x] ถอด procedural/spatial audio, 3D emotion bubbles และ 3D interactive object nodes ชั่วคราวเพื่อแยกตรวจ frame pacing
+- [ ] เล่นทดสอบเส้นทางเต็มด้วย minimal presentation และเก็บผล frame pacing
+- [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ หลัง gameplay loop หลักลื่นและเสถียร
 
 ---
 

@@ -74,4 +74,36 @@ public sealed class AccusationCoalition
         CombinedSuspicionScore = 0f;
         Stage = CoalitionStage.Concluded;
     }
+
+    internal static AccusationCoalition Restore(
+        EntityId initiator,
+        EntityId target,
+        IEnumerable<EntityId> members,
+        IEnumerable<string> evidenceSummaries,
+        float combinedSuspicionScore,
+        CoalitionStage stage)
+    {
+        var coalition = new AccusationCoalition(initiator, target);
+        coalition._members.Clear();
+        foreach (EntityId member in members)
+        {
+            if (!member.IsEmpty && member != target)
+            {
+                _ = coalition._members.Add(member);
+            }
+        }
+
+        coalition._evidenceSummaries.Clear();
+        foreach (string evidence in evidenceSummaries.Where(item => !string.IsNullOrWhiteSpace(item)))
+        {
+            if (!coalition._evidenceSummaries.Contains(evidence, StringComparer.Ordinal))
+            {
+                coalition._evidenceSummaries.Add(evidence);
+            }
+        }
+
+        coalition.CombinedSuspicionScore = combinedSuspicionScore;
+        coalition.Stage = stage;
+        return coalition;
+    }
 }

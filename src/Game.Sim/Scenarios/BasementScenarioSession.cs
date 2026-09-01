@@ -384,6 +384,10 @@ public sealed class BasementScenarioSession
 
     public ConspiracySystem Conspiracy => _conspiracy;
 
+    public AccusationCoalition? ActiveCoalition => _conspiracy.ActiveCoalition;
+
+    public ClimaxResolution? LastClimaxResolution => _conspiracy.LastResolution;
+
     public AccusationCoalition? EvaluateConspiracy(EntityId? target = null)
     {
         EntityId t = target ?? _playerController.PlayerEntity;
@@ -405,6 +409,12 @@ public sealed class BasementScenarioSession
     {
         EntityId t = target ?? _playerController.PlayerEntity;
         return _conspiracy.ResolveClimax(choice, t);
+    }
+
+    public bool CanResolveClimax(EntityId? target = null)
+    {
+        EntityId t = target ?? _playerController.PlayerEntity;
+        return _conspiracy.CanResolveClimax(t);
     }
 
     public SessionSnapshot CaptureSnapshot()
@@ -485,13 +495,43 @@ public sealed class BasementScenarioSession
                 m.Status.ToString()))
             .ToArray();
 
+        InteractiveObjectSnapshot[] objects = _objects.AllObjects
+            .Select(obj => new InteractiveObjectSnapshot(
+                obj.Id,
+                obj.IsLocked,
+                obj.IsTampered))
+            .ToArray();
+
+        AccusationCoalitionSnapshot? coalition = _conspiracy.ActiveCoalition is { } activeCoalition
+            ? new AccusationCoalitionSnapshot(
+                activeCoalition.Initiator.Value,
+                activeCoalition.Target.Value,
+                activeCoalition.Members.Select(member => member.Value).ToArray(),
+                activeCoalition.EvidenceSummaries.ToArray(),
+                activeCoalition.CombinedSuspicionScore,
+                activeCoalition.Stage.ToString())
+            : null;
+
+        ClimaxResolutionSnapshot? climax = _conspiracy.LastResolution is { } resolution
+            ? new ClimaxResolutionSnapshot(
+                resolution.Choice.ToString(),
+                resolution.Title,
+                resolution.NarrativeText,
+                resolution.PlayerVindicated,
+                resolution.ExistentialAwakeningTriggered,
+                resolution.PlayerFled)
+            : null;
+
         return new SessionSnapshot(
             metadata,
             entities,
             events,
             memories,
             suspicions,
-            movements);
+            movements,
+            objects,
+            coalition,
+            climax);
     }
 
     public static BasementScenarioSession FromSnapshot(
@@ -501,6 +541,7 @@ public sealed class BasementScenarioSession
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(rules);
+        SessionSnapshotValidator.Validate(snapshot);
 
         var options = new BasementScenarioOptions(
             seed: snapshot.Metadata.Seed,
@@ -607,6 +648,15 @@ public sealed class BasementScenarioSession
         {
             session._playerController.SetPlayerEntity(new EntityId(snapshot.Metadata.ActivePlayerActor));
         }
+
+        foreach (InteractiveObjectSnapshot objectSnapshot in snapshot.Objects ?? [])
+        {
+            InteractiveObject obj = session._objects.GetObject(objectSnapshot.Id)
+                ?? throw new InvalidDataException($"Snapshot references unknown object '{objectSnapshot.Id}'.");
+            obj.RestoreState(objectSnapshot.IsLocked, objectSnapshot.IsTampered);
+        }
+
+        session._conspiracy.RestoreState(snapshot.Coalition, snapshot.ClimaxResolution);
 
         return session;
     }

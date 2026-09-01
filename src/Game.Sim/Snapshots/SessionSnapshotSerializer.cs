@@ -31,6 +31,7 @@ public static class SessionSnapshotSerializer
     public static string ToJson(SessionSnapshot snapshot, bool indented = true)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
+        SessionSnapshotValidator.Validate(snapshot);
         JsonSerializerOptions options = indented ? IndentedJsonOptions : CompactJsonOptions;
         return JsonSerializer.Serialize(snapshot, options);
     }
@@ -38,8 +39,10 @@ public static class SessionSnapshotSerializer
     public static SessionSnapshot FromJson(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
-        return JsonSerializer.Deserialize<SessionSnapshot>(json, IndentedJsonOptions)
-            ?? throw new InvalidOperationException("Failed to deserialize session snapshot.");
+        SessionSnapshot snapshot = JsonSerializer.Deserialize<SessionSnapshot>(json, IndentedJsonOptions)
+            ?? throw new InvalidDataException("Failed to deserialize session snapshot.");
+        SessionSnapshotValidator.Validate(snapshot);
+        return snapshot;
     }
 
     public static void SaveToFile(SessionSnapshot snapshot, string filePath)
@@ -47,14 +50,28 @@ public static class SessionSnapshotSerializer
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
-        string? directory = Path.GetDirectoryName(filePath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
+        SessionSnapshotValidator.Validate(snapshot);
+        string fullPath = Path.GetFullPath(filePath);
+        string directory = Path.GetDirectoryName(fullPath)
+            ?? throw new InvalidOperationException("Snapshot path must have a parent directory.");
+        _ = Directory.CreateDirectory(directory);
         string json = ToJson(snapshot, indented: true);
-        File.WriteAllText(filePath, json);
+        string temporaryPath = Path.Combine(
+            directory,
+            $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            File.WriteAllText(temporaryPath, json);
+            File.Move(temporaryPath, fullPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 
     public static SessionSnapshot LoadFromFile(string filePath)

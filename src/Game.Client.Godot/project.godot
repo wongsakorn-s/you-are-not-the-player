@@ -25,3 +25,7 @@ textures/default_filters/use_nearest_mipmap_filter=false
 [dotnet]
 
 project/assembly_name="Game.Client.Godot"
+
+[physics]
+
+common/physics_interpolation=true

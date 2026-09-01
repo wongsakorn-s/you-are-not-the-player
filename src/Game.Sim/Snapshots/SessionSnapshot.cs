@@ -6,4 +6,7 @@ public sealed record SessionSnapshot(
     IReadOnlyList<WorldEventSnapshot> Events,
     IReadOnlyList<EntityMemoryStoreSnapshot> Memories,
     IReadOnlyList<SuspicionCaseSnapshot> Suspicions,
-    IReadOnlyList<MovementRequestSnapshot> PendingMovements);
+    IReadOnlyList<MovementRequestSnapshot> PendingMovements,
+    IReadOnlyList<InteractiveObjectSnapshot>? Objects = null,
+    AccusationCoalitionSnapshot? Coalition = null,
+    ClimaxResolutionSnapshot? ClimaxResolution = null);

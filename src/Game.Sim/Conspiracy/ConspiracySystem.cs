@@ -2,6 +2,7 @@ using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
 using Game.Sim.Memory;
+using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
 using Game.Sim.Time;
 using Game.Sim.World;
@@ -49,11 +50,20 @@ public sealed class ConspiracySystem
 
     public AccusationCoalition? ActiveCoalition => _activeCoalition;
 
+    public ClimaxResolution? LastResolution { get; private set; }
+
     public AccusationCoalition? EvaluateAndFormCoalition(EntityId target)
     {
         if (target.IsEmpty)
         {
             return null;
+        }
+
+        if (_activeCoalition is { } existing &&
+            existing.Target == target &&
+            existing.Stage is CoalitionStage.Confronting or CoalitionStage.Concluded)
+        {
+            return existing;
         }
 
         var candidateSuspicions = new List<(EntityId Actor, float Score, List<string> Evidence)>();
@@ -97,15 +107,14 @@ public sealed class ConspiracySystem
 
     public WorldEvent? TriggerConfrontation(LocationId confrontationLocation)
     {
-        if (_activeCoalition is null || !_activeCoalition.ConsensusReached)
+        if (_activeCoalition is null ||
+            !_activeCoalition.ConsensusReached ||
+            _activeCoalition.Stage != CoalitionStage.ConsensusReached)
         {
             return null;
         }
 
         _activeCoalition.Stage = CoalitionStage.Confronting;
-
-        string memberList = string.Join(", ", _activeCoalition.Members.Select(m => m.Value));
-        string description = $"Confrontation initiated by [{memberList}] against {_activeCoalition.Target.Value}. Evidence: {string.Join(", ", _activeCoalition.EvidenceSummaries)}";
 
         WorldEvent confrontationEvent = _events.Create(
             actor: _activeCoalition.Initiator,
@@ -121,51 +130,87 @@ public sealed class ConspiracySystem
 
     public ClimaxResolution ResolveClimax(PlayerClimaxChoice choice, EntityId target)
     {
+        if (!CanResolveClimax(target))
+        {
+            throw new InvalidOperationException(
+                "The climax cannot be resolved until a coalition reaches consensus and begins a confrontation.");
+        }
+
+        ClimaxResolution resolution;
         switch (choice)
         {
             case PlayerClimaxChoice.ConfessReality:
-                if (_activeCoalition is not null)
-                {
-                    _activeCoalition.Stage = CoalitionStage.Concluded;
-                }
+                _activeCoalition!.Stage = CoalitionStage.Concluded;
 
-                return new ClimaxResolution(
+                resolution = new ClimaxResolution(
                     Choice: PlayerClimaxChoice.ConfessReality,
                     Title: "Existential Awakening Ending",
                     NarrativeText: $"The NPCs of the hotel stand frozen in collective awe and terror. The impossible time skips, vanishing locked items, and unnatural speed... it wasn't madness or crime. You are 'The Player', and their world is a simulated reality.",
                     PlayerVindicated: false,
                     ExistentialAwakeningTriggered: true,
                     PlayerFled: false);
+                break;
 
             case PlayerClimaxChoice.DenyAndCounter:
-                if (_activeCoalition is not null)
-                {
-                    _activeCoalition.Dissolve();
-                }
+                _activeCoalition!.Dissolve();
 
-                return new ClimaxResolution(
+                resolution = new ClimaxResolution(
                     Choice: PlayerClimaxChoice.DenyAndCounter,
                     Title: "Doubt & Division Ending",
                     NarrativeText: $"You skillfully cross-examine the witnesses, pointing out contradictions in their hearsay and turning their suspicions against each other. The coalition collapses into mutual confusion and second-guessing.",
                     PlayerVindicated: true,
                     ExistentialAwakeningTriggered: false,
                     PlayerFled: false);
+                break;
 
             case PlayerClimaxChoice.Flee:
             default:
-                if (_activeCoalition is not null)
-                {
-                    _activeCoalition.Stage = CoalitionStage.Concluded;
-                }
+                _activeCoalition!.Stage = CoalitionStage.Concluded;
 
-                return new ClimaxResolution(
+                resolution = new ClimaxResolution(
                     Choice: PlayerClimaxChoice.Flee,
                     Title: "The Great Escape Ending",
                     NarrativeText: $"Exploiting a moment of hesitation, you dash past the perimeter into the mist-shrouded hotel garden, escaping their grasp while leaving the conspiracy shouting into the darkness.",
                     PlayerVindicated: false,
                     ExistentialAwakeningTriggered: false,
                     PlayerFled: true);
+                break;
         }
+
+        LastResolution = resolution;
+        return resolution;
+    }
+
+    public bool CanResolveClimax(EntityId target) =>
+        _activeCoalition is { } coalition &&
+        coalition.Target == target &&
+        coalition.ConsensusReached &&
+        coalition.Stage == CoalitionStage.Confronting &&
+        LastResolution is null;
+
+    internal void RestoreState(
+        AccusationCoalitionSnapshot? coalitionSnapshot,
+        ClimaxResolutionSnapshot? resolutionSnapshot)
+    {
+        _activeCoalition = coalitionSnapshot is null
+            ? null
+            : AccusationCoalition.Restore(
+                new EntityId(coalitionSnapshot.Initiator),
+                new EntityId(coalitionSnapshot.Target),
+                coalitionSnapshot.Members.Select(member => new EntityId(member)),
+                coalitionSnapshot.EvidenceSummaries,
+                coalitionSnapshot.CombinedSuspicionScore,
+                Enum.Parse<CoalitionStage>(coalitionSnapshot.Stage, ignoreCase: true));
+
+        LastResolution = resolutionSnapshot is null
+            ? null
+            : new ClimaxResolution(
+                Enum.Parse<PlayerClimaxChoice>(resolutionSnapshot.Choice, ignoreCase: true),
+                resolutionSnapshot.Title,
+                resolutionSnapshot.NarrativeText,
+                resolutionSnapshot.PlayerVindicated,
+                resolutionSnapshot.ExistentialAwakeningTriggered,
+                resolutionSnapshot.PlayerFled);
     }
 
     public static float CalculateConcernScore(SuspicionVector vector)

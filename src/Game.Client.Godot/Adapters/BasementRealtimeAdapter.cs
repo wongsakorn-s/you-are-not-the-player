@@ -120,6 +120,8 @@ public sealed class BasementRealtimeAdapter
 
     public void TogglePause() => IsPaused = !IsPaused;
 
+    public void SetPaused(bool isPaused) => IsPaused = isPaused;
+
     public void SetSpeed(float speed)
     {
         if (!float.IsFinite(speed) || speed <= 0.0f)
@@ -146,9 +148,15 @@ public sealed class BasementRealtimeAdapter
 
     public AccusationCoalition? EvaluateConspiracy(EntityId? target = null) => _session.EvaluateConspiracy(target);
 
+    public AccusationCoalition? ActiveCoalition => _session.ActiveCoalition;
+
+    public ClimaxResolution? LastClimaxResolution => _session.LastClimaxResolution;
+
     public WorldEvent? TriggerConfrontation(LocationId? location = null) => _session.TriggerConfrontation(location);
 
     public ClimaxResolution ResolveClimax(PlayerClimaxChoice choice, EntityId? target = null) => _session.ResolveClimax(choice, target);
+
+    public bool CanResolveClimax(EntityId? target = null) => _session.CanResolveClimax(target);
 
     public static BasementRealtimeAdapter FromSnapshot(
         SessionSnapshot snapshot,

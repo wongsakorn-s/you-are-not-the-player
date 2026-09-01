@@ -6,6 +6,8 @@ public sealed partial class DebugHud : CanvasLayer
 {
     private readonly Label _status = new();
     private readonly Label _events = new();
+    private readonly Label _objective = new();
+    private readonly Label _feedback = new();
     private readonly Label _help = new();
 
     public override void _Ready()
@@ -21,15 +23,34 @@ public sealed partial class DebugHud : CanvasLayer
         ConfigureLabel(_events, new Vector2(836, 26), new Vector2(415, 335), fontSize: 14);
         AddChild(_events);
 
-        var helpBackground = CreateBackground(new Vector2(16, 652), new Vector2(1248, 52));
+        var helpBackground = CreateBackground(new Vector2(16, 604), new Vector2(1248, 100));
         AddChild(helpBackground);
-        ConfigureLabel(_help, new Vector2(28, 662), new Vector2(1220, 34), fontSize: 14);
+
+        ConfigureLabel(_objective, new Vector2(28, 612), new Vector2(1220, 24), fontSize: 15);
+        _objective.AddThemeColorOverride("font_color", new Color("ffe08a"));
+        AddChild(_objective);
+
+        ConfigureLabel(_feedback, new Vector2(28, 640), new Vector2(1220, 24), fontSize: 14);
+        AddChild(_feedback);
+
+        ConfigureLabel(_help, new Vector2(28, 670), new Vector2(1220, 24), fontSize: 13);
         _help.Text = "P Possess | 1-8 Move | T Talk | Y Inquire | O Object | E Door | J Journal | K Conspiracy | Z/X/C Climax | F6/F7 Save/Load | Space Step | R Reset";
+        AddChild(_help);
     }
 
     public void SetStatus(string text) => _status.Text = text;
 
     public void SetEvents(string text) => _events.Text = text;
+
+    public void SetObjective(string text) => _objective.Text = text;
+
+    public void SetFeedback(string text, bool isError = false)
+    {
+        _feedback.Text = text;
+        _feedback.AddThemeColorOverride(
+            "font_color",
+            isError ? new Color("ff8f8f") : new Color("9ff2bd"));
+    }
 
     private static ColorRect CreateBackground(Vector2 position, Vector2 size) =>
         new()

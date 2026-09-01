@@ -1,5 +1,8 @@
 using Game.Sim.Actions;
+using Game.Sim.Conspiracy;
+using Game.Sim.Locations;
 using Game.Sim.Logging;
+using Game.Sim.Objects;
 using Game.Sim.Scenarios;
 using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
@@ -32,6 +35,7 @@ public sealed class SessionSnapshotTests
         Assert.Equal(snapshot.Entities.Count, roundtrip.Entities.Count);
         Assert.Equal(snapshot.Events.Count, roundtrip.Events.Count);
         Assert.Equal(snapshot.Memories.Count, roundtrip.Memories.Count);
+        Assert.Equal(snapshot.Objects?.Count, roundtrip.Objects?.Count);
     }
 
     [Fact]
@@ -119,16 +123,104 @@ public sealed class SessionSnapshotTests
         Assert.Equal(continuousSession.Now.Tick, restoredSession.Now.Tick);
     }
 
+    [Fact]
+    public void Session_Restore_PreservesObjectAndConfrontationState()
+    {
+        BasementScenarioSession session = CreateSession();
+        AdvanceToConsensus(session);
+        AccusationCoalition coalition = Assert.IsType<AccusationCoalition>(
+            session.EvaluateConspiracy(BasementScenario.George));
+        Assert.True(coalition.ConsensusReached);
+
+        session.PlayerController.SetPlayerEntity(BasementScenario.George);
+        _ = session.PlayerController.RequestMove(new LocationId("kitchen"));
+        while (session.PendingMovements.Count > 0)
+        {
+            _ = session.CompleteMovement(session.PendingMovements[0].RequestId);
+        }
+
+        ObjectActionResult objectResult = session.TamperObject("kitchen-pantry-safe", "chef-key");
+        Assert.True(objectResult.Succeeded);
+        Assert.NotNull(session.TriggerConfrontation(BasementScenario.Lobby));
+
+        string json = SessionSnapshotSerializer.ToJson(session.CaptureSnapshot());
+        BasementScenarioSession restored = BasementScenarioSession.FromSnapshot(
+            SessionSnapshotSerializer.FromJson(json),
+            LoadRules());
+
+        InteractiveObject restoredSafe = Assert.IsType<InteractiveObject>(
+            restored.Objects.GetObject("kitchen-pantry-safe"));
+        Assert.False(restoredSafe.IsLocked);
+        Assert.True(restoredSafe.IsTampered);
+        Assert.Equal(CoalitionStage.Confronting, restored.ActiveCoalition?.Stage);
+        Assert.True(restored.CanResolveClimax(BasementScenario.George));
+        Assert.Equal(BasementScenario.George, restored.PlayerController.PlayerEntity);
+    }
+
+    [Fact]
+    public void SnapshotValidator_RejectsUnknownActivePlayer()
+    {
+        SessionSnapshot snapshot = CreateSession().CaptureSnapshot();
+        SessionSnapshot invalid = snapshot with
+        {
+            Metadata = snapshot.Metadata with { ActivePlayerActor = "missing-player" },
+        };
+
+        InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
+            SessionSnapshotSerializer.ToJson(invalid));
+
+        Assert.Contains("active player", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SnapshotFile_SaveTwice_ReplacesFileAndLeavesNoTemporaryFile()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(),
+            $"yanp-snapshot-tests-{Guid.NewGuid():N}");
+        string savePath = Path.Combine(directory, "quicksave.json");
+
+        try
+        {
+            BasementScenarioSession session = CreateSession();
+            SessionSnapshotSerializer.SaveToFile(session.CaptureSnapshot(), savePath);
+            _ = session.AdvanceOneTick();
+            SessionSnapshotSerializer.SaveToFile(session.CaptureSnapshot(), savePath);
+
+            SessionSnapshot loaded = SessionSnapshotSerializer.LoadFromFile(savePath);
+            Assert.Equal(1, loaded.Metadata.CurrentTick);
+            Assert.Empty(Directory.GetFiles(directory, "*.tmp"));
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    private static void AdvanceToConsensus(BasementScenarioSession session)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            _ = session.AdvanceOneTick();
+            while (session.PendingMovements.Count > 0)
+            {
+                _ = session.CompleteMovement(session.PendingMovements[0].RequestId);
+            }
+        }
+    }
+
+    private static InMemorySuspicionRuleRepository LoadRules()
+    {
+        string rulesPath = Path.Combine(AppContext.BaseDirectory, "Data", "SuspicionRules", "mvp.json");
+        return JsonSuspicionRuleParser.Parse(File.ReadAllText(rulesPath));
+    }
+
     private static BasementScenarioSession CreateSession()
     {
-        string rulesPath = Path.Combine(
-            AppContext.BaseDirectory,
-            "Data",
-            "SuspicionRules",
-            "mvp.json");
-        InMemorySuspicionRuleRepository rules = JsonSuspicionRuleParser.Parse(
-            File.ReadAllText(rulesPath));
-        return new BasementScenario(rules).CreateSession(
+        return new BasementScenario(LoadRules()).CreateSession(
             new BasementScenarioOptions(seed: 481_516, ticks: 16));
     }
 }
