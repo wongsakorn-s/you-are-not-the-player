@@ -1,8 +1,8 @@
 # System-First Development Plan — NPC Reality Deduction Game
 
-> เวอร์ชันเอกสาร: 0.6
+> เวอร์ชันเอกสาร: 0.7
 > วันที่: 2026-09-01
-> เป้าหมาย: สร้างเกมต้นแบบที่พิสูจน์ระบบ NPC / Event / Memory / Suspicion / Reality Anomalies / Conspiracy / 3D Presentation ให้สนุกก่อนลงทุนกับ UI, art และ content จำนวนมาก
+> เป้าหมาย: เปลี่ยน technical prototype ที่พิสูจน์ระบบ NPC / Event / Memory / Suspicion / Reality Anomalies / Conspiracy แล้ว ให้เป็น First Fun Playtest ผ่าน 2D Top-Down Systemic Mystery + Visual Novel Hybrid
 
 ---
 
@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, seeded PCG32 random, strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 160/160 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (รอเชื่อมเข้ากับ deterministic case generation), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 160/160 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -20,8 +20,9 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **Reality Anomalies & Meta-Suspicion System (The Core Concept):** ตรวจจับความผิดปกติของมิติเวลา เช่น การโหลดเซฟ (SaveReload Déjà Vu) และการเคลื่อนที่ฉับพลัน (The Blink Fast Travel) เพื่อกระตุ้นค่าความสงสัยในมิติ `ImpossibleBehavior` และ `MetaBehavior` ต่อ The Player.
 - **NPC Collective Conspiracy & Climax Accusation System:** ระบบรวมกลุ่มพันธมิตร NPC (`AccusationCoalition`), การสะสมหลักฐานจนเกิดมติเอกฉันท์ (`ConsensusReached`), การเรียกประชุมชี้ตัวใน Lobby, และทางเลือกของผู้เล่นสู่ฉากจบ (`Z` Confess, `X` Deny, `C` Flee).
 - **Multi-Scenario Headless Stress Testing Suite:** ชุดทดสอบ 4 Scenarios บน SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`) พร้อมระบบคำนวณ SHA-256 Event Fingerprint และ JSONL Traces.
-- **Godot Minimal Presentation:** คงเฉพาะพื้นที่โรงแรม ตัวละคร Navigation และ HUD ที่จำเป็นต่อการทดสอบ gameplay loop; ปิด 3D Emotion Bubbles และ 3D Interactive Object Nodes ชั่วคราวระหว่างปรับเสถียรภาพ.
-- **Audio Status:** ถอด procedural/spatial audio ออกจาก runtime ชั่วคราว จนกว่าจะยืนยัน frame pacing ของ gameplay loop หลักได้แล้ว.
+- **Presentation Direction:** เลือกเป้าหมายเป็น **Stylized 2D Top-Down Hotel Simulation + Visual Novel Dialogue + Detective Journal** เพื่อให้ schedule, movement, rumor และ suspicion อ่านง่ายและเหมาะกับผู้พัฒนา Godot มือใหม่.
+- **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
+- **Seed Variation Gap:** SimRunner deterministic และผ่านทุก scenario แต่การทดสอบ 10 seed ยังได้ fingerprint เดียวกัน จึงต้องเพิ่ม `SessionTruth` / `CaseGenerator` ให้ seed เลือก Hidden Player, Incident Culprit, secrets และ anomaly schedule โดยไม่เปิด hidden truth ให้ NPC.
 
 คำสั่งตรวจสอบระบบ:
 
@@ -2423,17 +2424,48 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 
 # 31. Recommended Immediate Goal
 
-สถานะ: Roadmap Phase 0–15 และ Post-MVP 1–5 เสร็จสมบูรณ์แล้ว ปัจจุบันอยู่ในช่วง Playable Vertical Slice Stabilization
+สถานะ: Roadmap Phase 0–15 และ Post-MVP 1–5 เสร็จสมบูรณ์แล้ว ปัจจุบันอยู่ในช่วง **2D Hybrid First Fun Playtest Development** โดยใช้ 3D prototype เดิมเป็นฐานตรวจ regression เท่านั้น
 
-ลำดับงานถัดไป:
+## 31.1 Locked Game Format
 
-1. **Stage A — Minimal Frame-Pacing Playtest (กำลังดำเนินการ):** เล่นเส้นทางเต็มด้วยโรงแรม ตัวละคร Navigation และ HUD โดยยังไม่นำ advanced visual/audio กลับมา พร้อมบันทึก FPS และอาการกระตุก
-2. **Stage B — Runtime Profiling:** หากยังพบอาการกระตุก ให้แยกวัด simulation tick, Navigation, HUD refresh และ rendering เพื่อแก้ที่ root cause
-3. **Stage C — Balance & Telemetry:** เก็บ metric จากหลาย seed เพื่อปรับ suspicion threshold, rumor propagation, coalition timing และความถี่ของ anomaly
-4. **Stage D — Data-Driven Content Pipeline:** ย้ายบทสนทนา encounter และผลลัพธ์ anomaly ที่ยัง hard-code ไปเป็นข้อมูลภายนอก
-5. **Stage E — Presentation Reintroduction:** นำ visual/audio กลับทีละระบบ พร้อม performance budget และ regression playtest ก่อนเปิดใช้งานจริง
+รูปแบบเป้าหมาย:
 
-ความคืบหน้า Playable Vertical Slice Stabilization:
+```text
+2D Top-Down Hotel Map
++ Visual Novel Dialogue
++ Detective Journal / Timeline
++ Deterministic Systemic Simulation
+= Psychological Social Deduction Mystery
+```
+
+ไม่เลือก Pure Visual Novel เพราะลดความสำคัญของ movement/schedule และไม่เลือก Stylized 3D เป็น production direction แรกเพราะเพิ่มภาระด้าน asset, camera, lighting, animation และ performance สำหรับผู้พัฒนาใหม่
+
+Human Player จะควบคุม Host คนเดียวต่อรอบ ปุ่มเปลี่ยนตัวละครอิสระใน 3D prototype ถือเป็น debug feature ส่วน possession ระหว่างรอบจริงจะใช้ได้เมื่อเป็น anomaly ที่มีผลต่อ narrative เท่านั้น
+
+## 31.2 Truth Model
+
+ระบบต้องแยกความจริงสามบทบาท:
+
+```text
+Human Host              = ร่างที่มนุษย์ควบคุม
+Hidden Player Influence = ตัวละครที่ได้รับ Player AI จาก seed
+Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่งอาจไม่ใช่ Player
+```
+
+ทั้งสามอาจเป็นคนเดียวกันหรือต่างกันได้ ข้อมูลนี้อยู่ใน `SessionTruth` และห้ามรั่วเข้า `WorldEvent`, Observation, Memory หรือ Suspicion โดยตรง
+
+## 31.3 Revised Roadmap
+
+1. **Milestone 1 — Format & Content Lock:** ยืนยันรายชื่อตัวละคร/role, first playable case และ mapping ระหว่างตัวละครใน narrative (`Clara`, `Elias`, `Mira`) กับ internal IDs ปัจจุบัน (`charlie`, `dana`, `evelyn`).
+2. **Milestone 2 — 2D Graybox:** สร้างแผนที่โรงแรม 8 ห้อง, character tokens, click-to-move, clock/schedule และ event feedback โดยใช้ placeholder ทั้งหมด.
+3. **Milestone 3 — Investigation UX:** เพิ่ม contextual actions, Visual Novel dialogue, inspect/follow, evidence source/confidence และ Journal/Timeline.
+4. **Milestone 4 — Deterministic Case Generation:** เพิ่ม `SessionTruth` / `CaseGenerator`; seed เดิมต้องได้ case/trace เดิม ส่วน seed ต่างกันต้องเปลี่ยน Hidden Player, culprit, secrets หรือ anomaly schedule อย่างควบคุมได้.
+5. **Milestone 5 — Accusation & Endings:** ให้เลือกผู้ถูกกล่าวหาและหลักฐาน พร้อมเริ่มจาก Correct Accusation, False Accusation และ You Were The Player.
+6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
+7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
+8. **Engineering Gate:** คืน CI, เพิ่ม headless tests/smoke test และ Windows export artifact ก่อนแจก build ให้ผู้ทดสอบภายนอก.
+
+ความคืบหน้า Technical/3D Prototype Stabilization:
 
 - [x] เพิ่ม objective/action feedback บน HUD และแก้แถบ Help ให้แสดงจริง
 - [x] บังคับลำดับ Coalition Consensus → Confrontation → Climax พร้อมป้องกัน event/ending ซ้ำ
@@ -2442,8 +2474,12 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] ติดตั้ง Godot 4.7.2 .NET และรัน automated headless playable-loop smoke test ผ่านโดยไม่มี runtime error/resource leak
 - [x] เปิด physics interpolation สำหรับจอ refresh rate สูง, reset interpolation หลัง teleport และแสดง FPS/physics rate บน HUD
 - [x] ถอด procedural/spatial audio, 3D emotion bubbles และ 3D interactive object nodes ชั่วคราวเพื่อแยกตรวจ frame pacing
-- [ ] เล่นทดสอบเส้นทางเต็มด้วย minimal presentation และเก็บผล frame pacing
-- [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ หลัง gameplay loop หลักลื่นและเสถียร
+- [x] เลือก production presentation เป็น 2D Top-Down + Visual Novel Hybrid
+- [ ] ล็อก CharacterDefinition และ first playable case
+- [ ] สร้าง 2D graybox ที่เล่น investigation loop ได้โดยไม่พึ่ง 3D presentation
+- [ ] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
+- [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
+- [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ
 
 ---
 
@@ -2454,10 +2490,10 @@ Architecture ที่แนะนำสำหรับโปรเจกต์�
 ```text
 ┌────────────────────────────────────┐
 │             GODOT 4.7.2            │
-│ Rendering / Input / Navigation     │
-│ Animation / World Interaction      │
+│ 2D Hotel Map / Character Tokens    │
+│ VN Dialogue / Journal / Accusation │
 └──────────────────┬─────────────────┘
-                   │ Adapter
+                   │ 2D Presentation Adapter
                    ▼
 ┌────────────────────────────────────┐
 │          PURE C# / .NET 8          │
@@ -2471,6 +2507,7 @@ Architecture ที่แนะนำสำหรับโปรเจกต์�
 │ Suspicion                          │
 │ Pattern Detection                  │
 │ Deterministic RNG                  │
+│ SessionTruth / CaseGenerator       │
 └──────────────────┬─────────────────┘
                    │
                    ▼
@@ -2478,20 +2515,20 @@ Architecture ที่แนะนำสำหรับโปรเจกต์�
 │     xUnit + Headless SimRunner     │
 │ Scenario Tests / Metrics / Replay  │
 └────────────────────────────────────┘
+
+3D hotel/navigation prototype เดิมเก็บไว้เป็น debug/regression scene และไม่ใช่ production presentation หลักใน milestone ปัจจุบัน
 ```
 
 หลักในการตัดสินใจทุก feature จากนี้ควรถามว่า:
 
-> “Feature นี้ทำให้ simulation สร้างสถานการณ์ที่น่าสนใจขึ้นหรือไม่?”
+> “Feature นี้ทำให้ผู้เล่นอ่านพฤติกรรม สร้างสมมติฐาน หรือรู้สึกถึงความเสี่ยงจากการสืบได้ดีขึ้นหรือไม่?”
 
 ถ้าไม่ ให้เลื่อนไปก่อน
 
-เป้าหมายของ milestone แรกไม่ใช่เกมที่ดูดี
-
-แต่คือ simulation ที่เมื่อเปิด log แล้วเราเริ่มเห็นเหตุการณ์ประเภท:
+เป้าหมายของ milestone ถัดไปไม่ใช่เกมที่ดูสวย แต่คือ graybox ที่ผู้เล่นมองเห็นและตีความเหตุการณ์ประเภท:
 
 > “Anna สงสัย George เพราะเห็นเขาลง Basement, บอก Bob, Bob เริ่มตาม George, George จึงเริ่มสงสัย Bob กลับ”
 
 โดยเราไม่ได้ script chain นี้ไว้โดยตรง
 
-เมื่อเหตุการณ์แบบนี้เริ่มเกิดขึ้นอย่างสม่ำเสมอ ค่อยขยับไปสร้าง Player AI, gameplay interaction และ presentation layer ต่อ
+เมื่อผู้เล่นใหม่สามารถสร้างและเปลี่ยนสมมติฐานจากเหตุการณ์เหล่านี้ได้ จึงค่อยลงทุนกับ art, animation, anomaly effects และ audio
