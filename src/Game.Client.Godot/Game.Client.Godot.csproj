@@ -10,6 +10,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\Game.Content\Data\Cases\first-playable-case.json">
+      <Link>Data\Cases\first-playable-case.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\Game.Content\Data\Characters\characters.json">
+      <Link>Data\Characters\characters.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\Game.Content\Data\Hotel\hotel-world.json">
       <Link>Data\Hotel\hotel-world.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

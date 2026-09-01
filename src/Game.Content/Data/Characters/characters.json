@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "characters": [
+    {
+      "id": "george",
+      "displayName": "George",
+      "role": "Receptionist",
+      "description": "The night receptionist who knows every guest and every key.",
+      "color": "ffe066",
+      "portraitKey": "george"
+    },
+    {
+      "id": "anna",
+      "displayName": "Anna",
+      "role": "Cleaner",
+      "description": "A cleaner whose rounds take her through rooms nobody else notices.",
+      "color": "77bdfb",
+      "portraitKey": "anna"
+    },
+    {
+      "id": "bob",
+      "displayName": "Bob",
+      "role": "Security Guard",
+      "description": "The hotel guard responsible for doors, cameras, and late-night reports.",
+      "color": "f5a65b",
+      "portraitKey": "bob"
+    },
+    {
+      "id": "charlie",
+      "displayName": "Clara",
+      "role": "Guest",
+      "description": "A long-stay guest who behaves as if the hotel were built for her.",
+      "color": "77dd77",
+      "portraitKey": "clara"
+    },
+    {
+      "id": "dana",
+      "displayName": "Elias",
+      "role": "Cook",
+      "description": "The night cook who hears more from the hallway than he admits.",
+      "color": "c9a0ff",
+      "portraitKey": "elias"
+    },
+    {
+      "id": "evelyn",
+      "displayName": "Mira",
+      "role": "Manager",
+      "description": "The manager protecting the hotel's reputation and its oldest secrets.",
+      "color": "ff7f9c",
+      "portraitKey": "mira"
+    }
+  ]
+}

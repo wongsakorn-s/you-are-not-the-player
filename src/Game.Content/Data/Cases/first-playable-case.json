@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "caseId": "the-basement-door",
+  "title": "The Basement Door",
+  "humanHost": "george",
+  "hiddenPlayer": "charlie",
+  "incidentCulprit": "george",
+  "playerArchetype": "Explorer",
+  "openingLocation": "lobby",
+  "objective": "Find out why the basement door opened during the night shift without exposing what George did.",
+  "seed": 481516
+}

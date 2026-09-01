@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (รอเชื่อมเข้ากับ deterministic case generation), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 160/160 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (รอเชื่อมเข้ากับ deterministic case generation), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 166/166 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -21,6 +21,9 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **NPC Collective Conspiracy & Climax Accusation System:** ระบบรวมกลุ่มพันธมิตร NPC (`AccusationCoalition`), การสะสมหลักฐานจนเกิดมติเอกฉันท์ (`ConsensusReached`), การเรียกประชุมชี้ตัวใน Lobby, และทางเลือกของผู้เล่นสู่ฉากจบ (`Z` Confess, `X` Deny, `C` Flee).
 - **Multi-Scenario Headless Stress Testing Suite:** ชุดทดสอบ 4 Scenarios บน SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`) พร้อมระบบคำนวณ SHA-256 Event Fingerprint และ JSONL Traces.
 - **Presentation Direction:** เลือกเป้าหมายเป็น **Stylized 2D Top-Down Hotel Simulation + Visual Novel Dialogue + Detective Journal** เพื่อให้ schedule, movement, rumor และ suspicion อ่านง่ายและเหมาะกับผู้พัฒนา Godot มือใหม่.
+- **2D Graybox Foundation:** เพิ่ม production scene `Scenes2D/Main2D.tscn`, แผนที่โรงแรม 8 ห้อง, character tokens 6 คน, click-to-move, simulation clock, event feedback และ 2D movement acknowledgement โดยล็อก George เป็น Human Host; ตั้งฉากนี้เป็น main scene แล้ว.
+- **Data-driven First Case:** เพิ่ม `characters.json` และ `first-playable-case.json` พร้อม schema validation โดยล็อกเคสแรกเป็น George/Host, Clara (`charlie`)/Hidden Player และ George/Incident Culprit.
+- **Investigation UX Foundation:** แถบ contextual actions อ่านตัวละครและวัตถุจากห้องปัจจุบัน, Visual Novel overlay รองรับถาม schedule/บุคคล/วัตถุและ confront evidence, Inspect บันทึก clue และ Detective Journal แสดง source, confidence, root event และ suspicion score โดยหยุด simulation ระหว่างอ่าน.
 - **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
 - **Seed Variation Gap:** SimRunner deterministic และผ่านทุก scenario แต่การทดสอบ 10 seed ยังได้ fingerprint เดียวกัน จึงต้องเพิ่ม `SessionTruth` / `CaseGenerator` ให้ seed เลือก Hidden Player, Incident Culprit, secrets และ anomaly schedule โดยไม่เปิด hidden truth ให้ NPC.
 
@@ -38,7 +41,7 @@ dotnet run --project tools/SimRunner -- --scenario reality-breach --seed 481516 
 
 Basement scenario รันผ่าน headless SimRunner พร้อม structured summary, JSONL trace,
 metrics และ SHA-256 event fingerprint (`9a5605575c7970a907aa649f19f645181c3db30f88fd8746c27201e1846acbb9`)
-ส่วน Godot รัน NPC Brain/session ทีละ tick โดยตรง และ commit logical location หลัง NavigationAgent3D เดินถึงจริง
+ส่วน Godot รัน NPC Brain/session ทีละ tick โดยตรง และ commit logical location หลัง character token 2D เดินถึงจริง
 
 เปิด Godot prototype:
 
@@ -47,14 +50,20 @@ winget install --id GodotEngine.GodotEngine.Mono --exact --version 4.7.2 --scope
 godot --editor --path src/Game.Client.Godot
 ```
 
-หลังติดตั้งครั้งแรกให้เปิด terminal ใหม่ แล้วตรวจ playable loop แบบ headless:
+หลังติดตั้งครั้งแรกให้เปิด terminal ใหม่ แล้วตรวจ 2D graybox แบบ headless:
 
 ```bash
-godot_console --headless --path src/Game.Client.Godot --fixed-fps 60 --quit-after 4000 -- --smoke-playthrough
+godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --smoke-2d
 ```
 
-การทดสอบสำเร็จเมื่อ process คืน exit code `0` และแสดง `PLAYABLE_LOOP_SMOKE_PASS` โดยครอบคลุม
-physical navigation, object interaction, coalition confrontation, climax resolution และ QuickSave/QuickLoad
+การทดสอบสำเร็จเมื่อ process คืน exit code `0` และแสดง `HOTEL_2D_SMOKE_PASS` โดยครอบคลุม
+การโหลด content, แผนที่ 8 ห้อง, ตัวละคร 6 คน, click-to-move และ movement acknowledgement กลับเข้า core.
+
+ฉาก 3D เดิมยังเรียกตรวจ regression ได้ด้วย:
+
+```bash
+godot_console --headless --path src/Game.Client.Godot res://Scenes/Main.tscn --fixed-fps 60 --quit-after 4000 -- --smoke-playthrough
+```
 
 ---
 
@@ -2456,9 +2465,9 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 
 ## 31.3 Revised Roadmap
 
-1. **Milestone 1 — Format & Content Lock:** ยืนยันรายชื่อตัวละคร/role, first playable case และ mapping ระหว่างตัวละครใน narrative (`Clara`, `Elias`, `Mira`) กับ internal IDs ปัจจุบัน (`charlie`, `dana`, `evelyn`).
-2. **Milestone 2 — 2D Graybox:** สร้างแผนที่โรงแรม 8 ห้อง, character tokens, click-to-move, clock/schedule และ event feedback โดยใช้ placeholder ทั้งหมด.
-3. **Milestone 3 — Investigation UX:** เพิ่ม contextual actions, Visual Novel dialogue, inspect/follow, evidence source/confidence และ Journal/Timeline.
+1. **Milestone 1 — Format & Content Lock (เสร็จแล้ว):** ยืนยันรายชื่อตัวละคร/role, first playable case และ mapping ระหว่างตัวละครใน narrative (`Clara`, `Elias`, `Mira`) กับ internal IDs ปัจจุบัน (`charlie`, `dana`, `evelyn`).
+2. **Milestone 2 — 2D Graybox (ฐานหลักเสร็จแล้ว):** สร้างแผนที่โรงแรม 8 ห้อง, character tokens, click-to-move, clock/schedule และ event feedback โดยใช้ placeholder ทั้งหมด; งานที่เหลือคือ contextual interaction และ readability ระหว่างการสืบสวน.
+3. **Milestone 3 — Investigation UX (กำลังพัฒนา):** contextual actions, Visual Novel dialogue, inspect และ Journal พร้อม source/confidence ใช้งานได้แล้ว; เหลือ Follow, evidence selection, Timeline filtering และปรับ dialogue content ให้อ่านเป็นธรรมชาติ.
 4. **Milestone 4 — Deterministic Case Generation:** เพิ่ม `SessionTruth` / `CaseGenerator`; seed เดิมต้องได้ case/trace เดิม ส่วน seed ต่างกันต้องเปลี่ยน Hidden Player, culprit, secrets หรือ anomaly schedule อย่างควบคุมได้.
 5. **Milestone 5 — Accusation & Endings:** ให้เลือกผู้ถูกกล่าวหาและหลักฐาน พร้อมเริ่มจาก Correct Accusation, False Accusation และ You Were The Player.
 6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
@@ -2475,8 +2484,10 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 - [x] เปิด physics interpolation สำหรับจอ refresh rate สูง, reset interpolation หลัง teleport และแสดง FPS/physics rate บน HUD
 - [x] ถอด procedural/spatial audio, 3D emotion bubbles และ 3D interactive object nodes ชั่วคราวเพื่อแยกตรวจ frame pacing
 - [x] เลือก production presentation เป็น 2D Top-Down + Visual Novel Hybrid
-- [ ] ล็อก CharacterDefinition และ first playable case
-- [ ] สร้าง 2D graybox ที่เล่น investigation loop ได้โดยไม่พึ่ง 3D presentation
+- [x] ล็อก CharacterDefinition และ first playable case แบบ data-driven พร้อม validation
+- [x] สร้างฐาน 2D graybox: โรงแรม 8 ห้อง, tokens 6 คน, click-to-move, clock/event feedback และ headless smoke test
+- [x] เพิ่ม contextual Talk/Inspect, Visual Novel dialogue และ Detective Journal รุ่นแรก
+- [ ] เพิ่ม Follow, evidence selection, Timeline filters และ contextual action ที่ครอบคลุมวัตถุ/ตัวละครทุกกรณี
 - [ ] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ

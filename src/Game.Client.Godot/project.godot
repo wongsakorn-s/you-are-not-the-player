@@ -6,7 +6,7 @@ config_version=5
 [application]
 
 config/name="YOU ARE NOT THE PLAYER"
-run/main_scene="res://Scenes/Main.tscn"
+run/main_scene="res://Scenes2D/Main2D.tscn"
 
 [display]
 
