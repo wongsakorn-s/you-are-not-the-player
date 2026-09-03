@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 218/218 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 234/234 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -30,6 +30,7 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **Floor-plan & Ending Pass:** เปลี่ยนแผนที่จาก node graph เป็นผังพื้นที่ภายใน/ภายนอกที่อ่านเป็นห้อง ทางเดิน ประตู และจุดใช้งานได้ พร้อมฉากจบสองช่วง (`คำกล่าวหา → ผลที่ตามมา`) ซึ่งอ้างเบาะแสจริงที่เด่นที่สุดของรอบนั้น.
 - **Thai Localization Audit:** UI, tooltip, objective, บทสนทนา, แฟ้มคดี และฉากจบรองรับไทย/อังกฤษ; ใช้คำไทยว่า “ผู้ควบคุม” ในเนื้อหาแทนคำระบบ `Player` และเพิ่ม smoke/regression check ป้องกันหัวข้อ journal หรือชื่อ George ภาษาอังกฤษหลุดในโหมดไทย.
 - **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
+- **Contradiction — จับโกหกได้:** การถามตารางงานทำให้ NPC ให้ `AlibiClaim` ที่ตรวจสอบได้ โดยคำตอบมาจากความทรงจำของเขาเอง และจะ**เลี่ยงพูดความจริงเมื่อความจริงคือห้องหวงห้าม** โดยกล่าวถึงห้องธรรมดาข้างเคียงแทน; `ContradictionFinder` เทียบคำให้การกับเบาะแสของผู้เล่น และการแย้งมีสองทาง: ถ้าคำให้การเท็จจะ `Cracked` และยอมบอกสิ่งที่เก็บไว้ แต่ถ้าคำให้การจริงจะ `Backfired` และ**เพิ่ม Exposure ของผู้กล่าวหาเอง** ทำให้เบาะแสที่เห็นเองกับที่ได้ยินต่อกันมามีน้ำหนักต่างกันจริง.
 - **Exposure — ผู้เล่นก็ถูกโลกสังเกต (§0.7 Deviation):** อ่าน suspicion pipeline กลับด้านโดยใช้ Human Host เป็น subject ผ่าน `ExposureReport` แล้วแสดงเป็นภาษาคน 4 ระดับ (`ยังไม่มีใครสนใจ → มีคนสังเกต → ถูกจับตา → จนมุม`) บน HUD, ข้างนาฬิกา, หน้า `คนอื่นมองคุณอย่างไร` ในแฟ้มคดี และ alert เมื่อระดับขยับขึ้น; มีราคาจริงคือคนที่จับได้จะตอบอย่างระมัดระวัง (Watched) และเลิกเล่าเรื่องคนอื่นให้ฟัง (Cornered) โดยคิดเป็นรายคน ไม่ใช่ค่ารวม จึงไม่ปิดทางเล่นทั้งหมด.
 - **Inspect ≠ Tamper:** แก้ `ObjectActionHandler.Inspect` ที่ติด tag `Suspicious` ให้การสำรวจธรรมดา ทำให้แค่เปิดอ่านสมุดทะเบียนแขกก็ถูกมองเท่ากับการงัดตู้นิรภัย (field ชื่อ `IsSuspiciousToTamper`); fingerprint ของ `deceptive-alibi` เปลี่ยนจากการแก้นี้โดยตั้งใจ ส่วน basement/rumor-cascade/reality-breach เท่าเดิม.
 - **Deterministic Case Generation:** เพิ่ม `Game.Sim/Cases/` ประกอบด้วย `SessionTruth`, `CaseGenerator`, `CaseGenerationOptions`, `SecretAssignment` และ `AnomalyBeat`; seed เดียวกันได้ case เดิมเสมอ ส่วน seed ต่างกันเปลี่ยน Hidden Player, archetype, Incident Culprit, secrets และ anomaly schedule โดย content พินค่าใดไว้ก็ได้ (first playable case พินเฉพาะ `incidentCulprit` เพราะบทจบอ้างถึงโดยตรง); `BasementScenarioOptions.Truth` เป็น optional จึงไม่กระทบ fingerprint ของ 4 regression scenario เดิม.
@@ -2436,7 +2437,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Automated tests ผ่าน (218/218 tests passed)
+- [x] Automated tests ผ่าน (234/234 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2496,7 +2497,7 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 5. **Milestone 5 — Accusation & Endings (ฐานแรกเสร็จแล้ว):** เลือกผู้ถูกกล่าวหาและแสดงฉาก `คำกล่าวหา → ผลที่ตามมา` สำหรับคำตอบถูก/ผิดได้แล้ว; หลังมี `SessionTruth` ให้ขยาย Correct Accusation, False Accusation และ You Were The Player ตาม case variation.
 6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 218/218 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 234/234 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 

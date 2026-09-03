@@ -331,6 +331,16 @@ public sealed class BasementScenarioSession
     /// on the host. Nothing hidden is consulted; every entry traces back to an
     /// observation some NPC actually made.
     /// </summary>
+    /// <summary>Everything the cast has told the player about their whereabouts.</summary>
+    public IReadOnlyList<AlibiClaim> Claims => _dialogue.Claims.Claims;
+
+    /// <summary>
+    /// The claims the player currently holds a clue against. First-hand clues sort
+    /// first because those are the ones worth staking a confrontation on.
+    /// </summary>
+    public IReadOnlyList<Contradiction> FindContradictions(EntityId host) =>
+        ContradictionFinder.Find(_dialogue.Claims.Claims, GetMemories(host));
+
     public ExposureReport GetExposure(EntityId host)
     {
         var observers = new List<ObserverExposure>();

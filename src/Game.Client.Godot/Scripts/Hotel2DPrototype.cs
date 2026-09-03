@@ -1227,6 +1227,17 @@ public sealed partial class Hotel2DPrototype : Node2D
                 () => ExecuteObjectInquiry(partner, objectToAsk)));
         }
 
+        // Only offered when the player is actually holding something that
+        // disagrees with this person's own account. Otherwise "confront" is a
+        // button with no stakes and no meaning.
+        Contradiction[] against = FindContradictionsAgainst(partner);
+        if (against.Length > 0)
+        {
+            choices.Add(new InvestigationChoice(
+                T("Challenge their story", "แย้งคำให้การ"),
+                () => OpenChallenge(partner, against)));
+        }
+
         choices.Add(new InvestigationChoice(
             T("Choose evidence to confront", "เลือกหลักฐานเพื่อเผชิญหน้า"),
             () => OpenEvidenceForPartner(partner)));
@@ -1256,6 +1267,110 @@ public sealed partial class Hotel2DPrototype : Node2D
 
         DialogueOutcome outcome = _simulation.Talk(request);
         ShowDialogueOutcome(partner, request, outcome, prefix: GuardedPrefix(partner));
+    }
+
+    private Contradiction[] FindContradictionsAgainst(EntityId partner) =>
+        _simulation is null
+            ? []
+            : _simulation.FindContradictions(_humanHost)
+                .Where(item => item.Claim.Speaker == partner)
+                .ToArray();
+
+    private void OpenChallenge(EntityId partner, IReadOnlyList<Contradiction> against)
+    {
+        var choices = new List<InvestigationChoice>();
+        foreach (Contradiction item in against.Take(3))
+        {
+            Contradiction selected = item;
+            string claimed = DisplayLocation(selected.Claim.ClaimedLocation);
+            string seen = DisplayLocation(selected.Evidence.Location!.Value);
+            choices.Add(new InvestigationChoice(
+                T(
+                    $"\"You said {claimed} — but you were at {seen}.\"",
+                    $"\"คุณบอกว่าอยู่{claimed} แต่คุณอยู่ที่{seen}\""),
+                () => ExecuteChallenge(partner, selected)));
+        }
+
+        choices.Add(new InvestigationChoice(
+            T("Say nothing for now", "ยังไม่พูดอะไร"),
+            () => OpenConversation(partner)));
+
+        string risk = string.Join('\n', against.Take(3).Select(item =>
+            $"• {ClaimPresentationFormatter.DescribeChallengeRisk(item.EvidenceIsFirstHand, _isThai)}"));
+        ShowInvestigationScreen(
+            $"{T("CHALLENGE", "แย้งคำให้การ")} — {DisplayName(partner)}",
+            T(
+                "If the clue is right, they have to explain themselves. If it is not, " +
+                    "you have just called someone a liar in front of them.\n\n" + risk,
+                "ถ้าเบาะแสถูก เขาต้องอธิบายตัวเอง " +
+                    "แต่ถ้าผิด คุณเพิ่งกล่าวหาคนต่อหน้าเขา\n\n" + risk),
+            new Color("f1d18a"),
+            choices);
+    }
+
+    private void ExecuteChallenge(EntityId partner, Contradiction contradiction)
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        DialogueOutcome outcome = _simulation.Talk(new DialogueRequest(
+            DialogueActionKind.ConfrontEvidence,
+            _humanHost,
+            partner,
+            confrontingMemoryId: contradiction.Evidence.Id));
+        _hasConfronted = true;
+        RefreshProgress();
+
+        // A backfire has to be perceived before it counts against the player, so
+        // give the room a moment to notice what was just said.
+        for (int index = 0; index < 3; index++)
+        {
+            _simulation.Step();
+        }
+
+        HandleSimulationChanges();
+        RefreshExposure();
+        ShowChallengeOutcome(partner, outcome);
+    }
+
+    private void ShowChallengeOutcome(EntityId partner, DialogueOutcome outcome)
+    {
+        string who = DisplayName(partner);
+        (string title, string body, string color) = outcome.Confrontation switch
+        {
+            ConfrontationResult.Cracked => (
+                T("THEIR STORY BREAKS", "คำให้การแตก"),
+                T(
+                    $"{who} stops. The room goes very quiet.\n\n{outcome.Text}\n\n" +
+                        "They have given up something they were holding back. It is in your case file now.",
+                    $"{who} หยุด ห้องเงียบลงมาก\n\n{outcome.Text}\n\n" +
+                        "เขายอมบอกสิ่งที่เก็บไว้แล้ว มันอยู่ในแฟ้มคดีของคุณแล้ว"),
+                "77dd77"),
+            ConfrontationResult.Backfired => (
+                T("THEIR STORY HOLDS", "คำให้การไม่แตก"),
+                T(
+                    $"{outcome.Text}\n\n" +
+                        "You called someone a liar on the strength of a story that was not true. " +
+                        "People will remember that you did that.",
+                    $"{outcome.Text}\n\n" +
+                        "คุณกล่าวหาว่าเขาโกหก โดยอาศัยเรื่องที่ไม่จริง " +
+                        "และทุกคนจะจำไว้ว่าคุณทำอย่างนั้น"),
+                "e06c75"),
+            _ => (
+                T("NOTHING TO ANSWER FOR", "ไม่มีอะไรต้องตอบ"),
+                outcome.Text,
+                "8091b3"),
+        };
+
+        ShowInvestigationScreen(
+            title,
+            body,
+            new Color(color),
+            [new InvestigationChoice(
+                T("Keep talking", "คุยต่อ"),
+                () => OpenConversation(partner))]);
     }
 
     private void ShowRefusal(EntityId partner)
@@ -1525,6 +1640,9 @@ public sealed partial class Hotel2DPrototype : Node2D
             T("PEOPLE TO WATCH", "คนที่ควรจับตา"),
             () => OpenPeopleToWatch(view, page.PageNumber - 1)));
         choices.Add(new InvestigationChoice(
+            T("WHAT PEOPLE TOLD YOU", "สิ่งที่คนอื่นบอกคุณ"),
+            () => OpenClaimsPage(view, page.PageNumber - 1)));
+        choices.Add(new InvestigationChoice(
             T("HOW YOU LOOK", "คนอื่นมองคุณอย่างไร"),
             () => OpenExposurePage(view, page.PageNumber - 1)));
         ShowInvestigationScreen(
@@ -1578,6 +1696,33 @@ public sealed partial class Hotel2DPrototype : Node2D
             [new InvestigationChoice(
                 T("BACK TO CLUES", "กลับไปที่เบาะแส"),
                 () => OpenJournalPage(returnView, returnPage))]);
+    }
+
+    // Statements live apart from clues on purpose. A clue is something that
+    // happened; a claim is something somebody said happened, and keeping the two
+    // in one list is what would let the player mistake one for the other.
+    private void OpenClaimsPage(JournalView returnView, int returnPage)
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        IReadOnlyList<Contradiction> contradictions =
+            _simulation.FindContradictions(_humanHost);
+        ShowInvestigationScreen(
+            T("WHAT PEOPLE TOLD YOU", "สิ่งที่คนอื่นบอกคุณ"),
+            ClaimPresentationFormatter.FormatClaims(
+                _simulation.Claims,
+                contradictions,
+                DisplayName,
+                DisplayLocation,
+                _isThai),
+            new Color(contradictions.Count > 0 ? "f1d18a" : "77bdfb"),
+            [new InvestigationChoice(
+                T("BACK TO CLUES", "กลับไปที่เบาะแส"),
+                () => OpenJournalPage(returnView, returnPage))],
+            showPortrait: false);
     }
 
     private void OpenExposurePage(JournalView returnView, int returnPage)
@@ -2496,7 +2641,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             GD.Print(
                 $"HOTEL_2D_SMOKE_PASS rooms={_hotel.Locations.Length} " +
                 $"actors={_characters.Count} host={_humanHost.Value} " +
-                "dialogue=pass inspect=pass journal=pass exposure=pass");
+                "dialogue=pass inspect=pass journal=pass exposure=pass claims=pass");
             GetTree().Quit(0);
         }
         else if (_smokeElapsed >= 8.0)
@@ -2572,6 +2717,73 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         GD.Print($"HOTEL_2D_EXPOSURE level={after.Level} observers={after.Observers.Count}");
+    }
+
+    private bool _smokeClaimsCompleted;
+
+    // Walks the second half of the loop: ask someone to account for themselves,
+    // check the statement is recorded as something separate from a clue, and
+    // check the page that shows it renders in the player's own language.
+    private void RunContradictionSmoke()
+    {
+        if (_simulation is null || _smokeClaimsCompleted)
+        {
+            return;
+        }
+
+        _smokeClaimsCompleted = true;
+
+        IReadOnlyList<EntityId> present = _simulation.PlayerController.GetPresentActors();
+        EntityId partner = present.FirstOrDefault(actor => actor != _humanHost);
+        if (partner.IsEmpty)
+        {
+            throw new InvalidOperationException("No one was present to give an account.");
+        }
+
+        int before = _simulation.Claims.Count;
+        DialogueOutcome asked = _simulation.Talk(new DialogueRequest(
+            DialogueActionKind.InquireSchedule,
+            _humanHost,
+            partner));
+        if (!asked.Succeeded || asked.Claim is null)
+        {
+            throw new InvalidOperationException(
+                "Asking about a shift did not put a checkable claim on the record.");
+        }
+
+        if (_simulation.Claims.Count != before + 1 ||
+            _simulation.Claims[^1].Speaker != partner)
+        {
+            throw new InvalidOperationException("The claim ledger did not record the statement.");
+        }
+
+        string page = ClaimPresentationFormatter.FormatClaims(
+            _simulation.Claims,
+            _simulation.FindContradictions(_humanHost),
+            DisplayName,
+            DisplayLocation,
+            _isThai);
+        if (string.IsNullOrWhiteSpace(page))
+        {
+            throw new InvalidOperationException("The statements page rendered nothing.");
+        }
+
+        foreach (string leak in new[] { "AlibiClaim", "george", "charlie" })
+        {
+            if (page.Contains(leak, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"The statements page leaked '{leak}'.");
+            }
+        }
+
+        if (_isThai && page.Any(character => character is >= 'a' and <= 'z'))
+        {
+            throw new InvalidOperationException("Thai statements page contained English text.");
+        }
+
+        GD.Print(
+            $"HOTEL_2D_CLAIMS recorded={_simulation.Claims.Count} " +
+            $"contradictions={_simulation.FindContradictions(_humanHost).Count}");
     }
 
     private bool RunInvestigationSmoke()
@@ -2679,6 +2891,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             }
 
             RunExposureSmoke();
+            RunContradictionSmoke();
 
             _investigationOverlay.HideScreen();
             _worldAdapter.SetMovementPaused(false);

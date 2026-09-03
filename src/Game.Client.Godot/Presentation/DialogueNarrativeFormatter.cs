@@ -65,6 +65,19 @@ public sealed class DialogueNarrativeFormatter
                 JournalPresentationFormatter.FormatClock(outcome.TransferredMemory?.EventTime.Tick ?? 0),
                 StringComparison.Ordinal)
             .Replace("{object}", objectName ?? request.TargetObjectId ?? "object", StringComparison.Ordinal);
+
+        // A statement the case file will hold against someone has to be a
+        // statement the player actually heard. The catalog line sets the tone;
+        // the claim itself has to be said out loud or the two records disagree.
+        if (outcome.Claim is { } claim)
+        {
+            string where = displayLocation(claim.ClaimedLocation);
+            string when = JournalPresentationFormatter.FormatClock(claim.ClaimedTime.Tick);
+            result += useThai
+                ? $"\n\n\u0e15\u0e2d\u0e19 {when} \u0e09\u0e31\u0e19\u0e2d\u0e22\u0e39\u0e48\u0e17\u0e35\u0e48{where}"
+                : $"\n\nAround {when} I was at {where}.";
+        }
+
         return result;
     }
 }

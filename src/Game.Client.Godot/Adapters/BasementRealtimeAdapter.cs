@@ -103,6 +103,11 @@ public sealed class BasementRealtimeAdapter
 
     public ExposureReport GetExposure(EntityId host) => _session.GetExposure(host);
 
+    public IReadOnlyList<AlibiClaim> Claims => _session.Claims;
+
+    public IReadOnlyList<Contradiction> FindContradictions(EntityId host) =>
+        _session.FindContradictions(host);
+
     public void Interact(EntityId actor, string interactionId) =>
         _session.Interact(actor, interactionId);
 
