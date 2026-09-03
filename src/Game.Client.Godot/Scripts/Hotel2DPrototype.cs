@@ -17,6 +17,16 @@ using Godot;
 
 namespace Game.Client.Godot.Scripts;
 
+/// <summary>Which slice of the case file the player is currently reading.</summary>
+public enum JournalView
+{
+    All,
+    LastThirtyMinutes,
+    CurrentRoom,
+    SeenFirstHand,
+    HeardFromOthers,
+}
+
 public sealed partial class Hotel2DPrototype : Node2D
 {
     private const float MapLeft = 35.0f;
@@ -133,7 +143,15 @@ public sealed partial class Hotel2DPrototype : Node2D
         {
             _simulation.SetPaused(true);
             _worldAdapter.SetMovementPaused(true);
-            ShowMainMenu();
+            if (_replayRequested)
+            {
+                _replayRequested = false;
+                BeginInvestigation();
+            }
+            else
+            {
+                ShowMainMenu();
+            }
         }
         else
         {
@@ -155,13 +173,13 @@ public sealed partial class Hotel2DPrototype : Node2D
 
         if (_clockLabel is not null && _simulation is not null)
         {
-            _clockLabel.Text = ClockText(_simulation.CurrentTick, _simulation.Phase.ToString());
+            _clockLabel.Text = ClockText(_simulation.CurrentTick);
             _investigationOverlay?.SetTimeText(
                 !_gameStarted
                     ? string.Empty
                     : _gameEnded
                     ? T("SHIFT ENDED", "จบกะแล้ว")
-                    : $"● {ClockText(_simulation.CurrentTick, _simulation.Phase.ToString())}");
+                    : $"● {ClockText(_simulation.CurrentTick)}");
         }
 
         UpdateFollowTarget();
@@ -235,7 +253,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             clipText: true);
 
         _clockLabel = AddLabel(
-            ClockText(0, null),
+            ClockText(0),
             new Vector2(850.0f, 20.0f),
             new Vector2(220.0f, 32.0f),
             13,
@@ -727,9 +745,12 @@ public sealed partial class Hotel2DPrototype : Node2D
                 NpcMovementExecution execution = _simulation.RequestNpcMove(actor, destination);
                 if (execution.Status == NpcMovementExecutionStatus.Failed)
                 {
+                    // Both slots are stored up front and picked from later by
+                    // ActivityText, so each one has to be built in its own language
+                    // rather than from whatever DisplayLocation returns right now.
                     _npcActivities[actor] = (
-                        $"Could not reach {DisplayLocation(destination)}",
-                        $"ไปยัง{DisplayLocation(destination)}ไม่ได้");
+                        $"Could not reach {DisplayLocation(destination, useThai: false)}",
+                        $"ไปยัง{DisplayLocation(destination, useThai: true)}ไม่ได้");
                 }
             }
 
@@ -1331,17 +1352,6 @@ public sealed partial class Hotel2DPrototype : Node2D
             choices);
     }
 
-    private void InspectSelectedObject()
-    {
-        if (_objectSelector is null || _presentObjects.Count == 0)
-        {
-            return;
-        }
-
-        int selected = Math.Clamp(_objectSelector.Selected, 0, _presentObjects.Count - 1);
-        InspectObject(_presentObjects[selected]);
-    }
-
     private void InspectObject(InteractiveObject obj)
     {
         if (_simulation is null)
@@ -1379,17 +1389,27 @@ public sealed partial class Hotel2DPrototype : Node2D
 
         _hasOpenedJournal = true;
         RefreshProgress();
-        PlayerJournal journal = _simulation.GetPlayerJournal(_humanHost);
-        OpenJournalPage(journal, filter: null, pageIndex: 0);
+        OpenJournalPage(JournalView.All, pageIndex: 0);
     }
 
-    private void OpenJournalPage(PlayerJournal journal, TimelineFilter? filter, int pageIndex)
+    // The shift clock keeps running while the case file is open, so every screen
+    // below re-reads the journal instead of closing over one snapshot. Views are
+    // passed as an enum rather than a built TimelineFilter for the same reason:
+    // "last 30 minutes" has to be recomputed against the current time, otherwise
+    // it silently freezes into the window that was current when it was picked.
+    private void OpenJournalPage(JournalView view, int pageIndex)
     {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        PlayerJournal journal = _simulation.GetPlayerJournal(_humanHost);
         JournalPage page = JournalPresentationFormatter.FormatPage(
             journal,
             DisplayName,
             DisplayLocation,
-            filter,
+            BuildJournalFilter(view, journal),
             pageIndex,
             pageSize: 2,
             useThai: _isThai);
@@ -1398,22 +1418,22 @@ public sealed partial class Hotel2DPrototype : Node2D
         {
             choices.Add(new InvestigationChoice(
                 T("← PREVIOUS CLUES", "← เบาะแสก่อนหน้า"),
-                () => OpenJournalPage(journal, filter, page.PageNumber - 2)));
+                () => OpenJournalPage(view, page.PageNumber - 2)));
         }
 
         if (page.PageNumber < page.PageCount)
         {
             choices.Add(new InvestigationChoice(
                 T("NEXT CLUES →", "เบาะแสถัดไป →"),
-                () => OpenJournalPage(journal, filter, page.PageNumber)));
+                () => OpenJournalPage(view, page.PageNumber)));
         }
 
         choices.Add(new InvestigationChoice(
             T("CHANGE CLUE VIEW", "เปลี่ยนมุมมองเบาะแส"),
-            () => OpenJournalViews(journal)));
+            () => OpenJournalViews()));
         choices.Add(new InvestigationChoice(
             T("PEOPLE TO WATCH", "คนที่ควรจับตา"),
-            () => OpenPeopleToWatch(journal, filter, page.PageNumber - 1)));
+            () => OpenPeopleToWatch(view, page.PageNumber - 1)));
         ShowInvestigationScreen(
             T("CLUE JOURNAL", "บันทึกเบาะแส"),
             page.Text,
@@ -1421,7 +1441,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             choices);
     }
 
-    private void OpenJournalViews(PlayerJournal journal)
+    private void OpenJournalViews()
     {
         ShowInvestigationScreen(
             T("CHOOSE A CLUE VIEW", "เลือกมุมมองเบาะแส"),
@@ -1430,24 +1450,53 @@ public sealed partial class Hotel2DPrototype : Node2D
                 "เลือกเบาะแสชุดเล็กเพื่อเปรียบเทียบ คุณกลับมาหน้านี้ได้ตลอดเวลา"),
             new Color("77bdfb"),
             [
-                new InvestigationChoice(T("ALL CLUES", "เบาะแสทั้งหมด"), () => OpenJournalPage(journal, null, 0)),
-                new InvestigationChoice(T("LAST 30 MINUTES", "30 นาทีล่าสุด"), () => OpenJournalPage(journal, new TimelineFilter(MinimumTick: Math.Max(0, journal.CurrentTime.Tick - 30)), 0)),
-                new InvestigationChoice(T("IN THIS ROOM", "เหตุการณ์ในห้องนี้"), () => OpenJournalPage(journal, new TimelineFilter(Location: journal.CurrentLocation), 0)),
-                new InvestigationChoice(T("GEORGE SAW", "สิ่งที่จอร์จเห็นเอง"), () => OpenJournalPage(journal, new TimelineFilter(Kind: MemoryKind.Episodic), 0)),
-                new InvestigationChoice(T("WHAT PEOPLE SAID", "สิ่งที่คนอื่นเล่า"), () => OpenJournalPage(journal, new TimelineFilter(Kind: MemoryKind.Social), 0)),
+                new InvestigationChoice(
+                    T("ALL CLUES", "เบาะแสทั้งหมด"),
+                    () => OpenJournalPage(JournalView.All, 0)),
+                new InvestigationChoice(
+                    T("LAST 30 MINUTES", "30 นาทีล่าสุด"),
+                    () => OpenJournalPage(JournalView.LastThirtyMinutes, 0)),
+                new InvestigationChoice(
+                    T("IN THIS ROOM", "เหตุการณ์ในห้องนี้"),
+                    () => OpenJournalPage(JournalView.CurrentRoom, 0)),
+                new InvestigationChoice(
+                    T("GEORGE SAW", "สิ่งที่จอร์จเห็นเอง"),
+                    () => OpenJournalPage(JournalView.SeenFirstHand, 0)),
+                new InvestigationChoice(
+                    T("WHAT PEOPLE SAID", "สิ่งที่คนอื่นเล่า"),
+                    () => OpenJournalPage(JournalView.HeardFromOthers, 0)),
             ]);
     }
 
-    private void OpenPeopleToWatch(PlayerJournal journal, TimelineFilter? returnFilter, int returnPage)
+    private void OpenPeopleToWatch(JournalView returnView, int returnPage)
     {
+        if (_simulation is null)
+        {
+            return;
+        }
+
         ShowInvestigationScreen(
             T("PEOPLE TO WATCH", "คนที่ควรจับตา"),
-            JournalPresentationFormatter.FormatPeopleToWatch(journal, DisplayName, _isThai),
+            JournalPresentationFormatter.FormatPeopleToWatch(
+                _simulation.GetPlayerJournal(_humanHost),
+                DisplayName,
+                _isThai),
             new Color("f1d18a"),
             [new InvestigationChoice(
                 T("BACK TO CLUES", "กลับไปที่เบาะแส"),
-                () => OpenJournalPage(journal, returnFilter, returnPage))]);
+                () => OpenJournalPage(returnView, returnPage))]);
     }
+
+    private static TimelineFilter? BuildJournalFilter(JournalView view, PlayerJournal journal) =>
+        view switch
+        {
+            JournalView.LastThirtyMinutes => new TimelineFilter(
+                MinimumTick: Math.Max(0, journal.CurrentTime.Tick - 30)),
+            JournalView.CurrentRoom => new TimelineFilter(Location: journal.CurrentLocation),
+            JournalView.SeenFirstHand => new TimelineFilter(Kind: MemoryKind.Episodic),
+            JournalView.HeardFromOthers => new TimelineFilter(Kind: MemoryKind.Social),
+            _ => null,
+        };
 
     private void OpenEvidenceSelection()
     {
@@ -1931,25 +1980,22 @@ public sealed partial class Hotel2DPrototype : Node2D
                 JournalPresentationFormatter.FormatHeadline(entry, DisplayName, DisplayLocation, _isThai);
     }
 
-    private int CountCompletedSteps()
+    // ReloadCurrentScene builds a brand new node, so the replay intent cannot ride
+    // on an instance field. Without this both endings' buttons reloaded into the
+    // title menu and "replay the night" was indistinguishable from "back to title".
+    private static bool _replayRequested;
+
+    private void RestartShift()
     {
-        bool[] steps =
-        [
-            _hasMoved,
-            _hasTalked,
-            _hasInspected,
-            _hasOpenedJournal,
-            _hasConfronted,
-            _hasConcluded,
-        ];
-        return steps.Count(step => step);
+        _replayRequested = true;
+        GetTree().ReloadCurrentScene();
     }
 
-    private void RestartShift() => GetTree().ReloadCurrentScene();
-
-    private void ReturnToTitle() => GetTree().ReloadCurrentScene();
-
-    private void ToggleLanguage() => ShowPauseMenu();
+    private void ReturnToTitle()
+    {
+        _replayRequested = false;
+        GetTree().ReloadCurrentScene();
+    }
 
     private void ApplyLanguage(bool useThai, bool showStatus)
     {
@@ -2090,7 +2136,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         {
             if (_clockLabel is not null)
             {
-                _clockLabel.Text = ClockText(_simulation.CurrentTick, _simulation.Phase.ToString());
+                _clockLabel.Text = ClockText(_simulation.CurrentTick);
             }
 
             RefreshContextActions();
@@ -2110,19 +2156,12 @@ public sealed partial class Hotel2DPrototype : Node2D
     private string LocalizeText(string text)
     {
         string localized = text;
-        foreach ((EntityId actor, CharacterDefinition character) in _characters)
+        foreach (EntityId actor in _characters.Keys)
         {
             localized = localized.Replace(
                 actor.Value,
                 DisplayName(actor),
                 StringComparison.OrdinalIgnoreCase);
-            if (!_isThai)
-            {
-                localized = localized.Replace(
-                    character.DisplayName,
-                    character.DisplayName,
-                    StringComparison.OrdinalIgnoreCase);
-            }
         }
 
         if (!_isThai)
@@ -2470,9 +2509,11 @@ public sealed partial class Hotel2DPrototype : Node2D
     private string RoleText(CharacterDefinition character) =>
         $"{DisplayName(new EntityId(character.Id))}\n{DisplayRole(character)}";
 
-    private string DisplayLocation(LocationId location)
+    private string DisplayLocation(LocationId location) => DisplayLocation(location, _isThai);
+
+    private string DisplayLocation(LocationId location, bool useThai)
     {
-        if (_isThai)
+        if (useThai)
         {
             return location.Value.ToLowerInvariant() switch
             {
@@ -2602,7 +2643,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             ? T("CLOSE LENS", "ปิดมุมมอง")
             : T("INSIGHT", "ดูเจตนา");
 
-    private string ClockText(long tick, string? _)
+    private string ClockText(long tick)
     {
         int clampedTick = (int)Math.Clamp(tick, 0, NightShiftDirector.DeadlineTick);
         int minuteOfDay = ((23 * 60) + clampedTick) % (24 * 60);
@@ -2611,18 +2652,6 @@ public sealed partial class Hotel2DPrototype : Node2D
         int remaining = NightShiftDirector.DeadlineTick - clampedTick;
         return $"{hour:00}:{minute:00}  •  {remaining} {T("MIN LEFT", "นาทีที่เหลือ")}";
     }
-
-    private string DisplayPhase(string phase) =>
-        !_isThai
-            ? phase
-            : phase switch
-            {
-                "WaitingForWitness" => "รอพยาน",
-                "FeedbackLoop" => "วนรอบข้อมูล",
-                "Investigation" => "สืบสวน",
-                "Complete" => "จบคดี",
-                _ => phase,
-            };
 
     private string T(string english, string thai) => _isThai ? thai : english;
 

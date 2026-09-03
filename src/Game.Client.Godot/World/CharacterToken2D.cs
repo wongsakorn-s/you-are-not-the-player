@@ -173,11 +173,7 @@ public sealed partial class CharacterToken2D : Control
     {
         _insightVisible = visible && !_isHumanHost;
         Size = new Vector2(30.0f, 30.0f);
-        if (_activityLabel is not null)
-        {
-            _activityLabel.Visible = _insightVisible && _isSelected;
-        }
-
+        RefreshLabelVisibility();
         QueueRedraw();
     }
 
@@ -189,17 +185,25 @@ public sealed partial class CharacterToken2D : Control
         }
 
         _isSelected = isSelected;
+        RefreshLabelVisibility();
+        QueueRedraw();
+    }
+
+    // Insight view is a sweep over the whole cast, so it must not be gated on
+    // selection: only one token is ever selected, and gating it there left the
+    // view showing nothing at all whenever nobody was picked. The name label
+    // comes along so an activity line always has a visible owner.
+    private void RefreshLabelVisibility()
+    {
         if (_label is not null)
         {
-            _label.Visible = isSelected;
+            _label.Visible = _isSelected || _insightVisible;
         }
 
         if (_activityLabel is not null)
         {
-            _activityLabel.Visible = _insightVisible && isSelected;
+            _activityLabel.Visible = _insightVisible;
         }
-
-        QueueRedraw();
     }
 
     public void SetSpeedMultiplier(float multiplier)
