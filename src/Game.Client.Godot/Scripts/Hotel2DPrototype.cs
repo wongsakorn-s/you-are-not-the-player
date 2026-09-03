@@ -39,6 +39,7 @@ public sealed partial class Hotel2DPrototype : Node2D
     private readonly Godot2DWorldAdapter _worldAdapter = new();
     private readonly Dictionary<EntityId, CharacterDefinition> _characters = [];
     private readonly Dictionary<LocationId, Vector2> _locationMarkers = [];
+    private readonly Dictionary<LocationId, Label> _roomLabels = [];
     private readonly List<WorldEvent> _eventHistory = [];
     private readonly List<ShiftBeat> _shiftHistory = [];
     private readonly Dictionary<string, Button> _roomButtons = [];
@@ -111,8 +112,14 @@ public sealed partial class Hotel2DPrototype : Node2D
     private bool _hasConfronted;
     private bool _hasConcluded;
 
+    private bool _captureEnabled;
+    private int _captureFrames;
+
     public override void _Ready()
     {
+        _captureEnabled = OS.GetCmdlineUserArgs().Contains(
+            "--capture-ui",
+            StringComparer.OrdinalIgnoreCase);
         _smokeEnabled = OS.GetCmdlineUserArgs().Contains(
             "--smoke-2d",
             StringComparer.OrdinalIgnoreCase);
@@ -160,6 +167,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                 "คลิกห้องเพื่อย้ายจอร์จ ตัวละครอื่นจะเคลื่อนไหวตามจำลอง"));
         RefreshContextActions();
         RefreshProgress();
+        RefreshExposure();
         if (!_smokeEnabled)
         {
             _simulation.SetPaused(true);
@@ -216,6 +224,41 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         RunSmokeTest(delta);
+        RunCapture();
+    }
+
+    // Development aid: renders a few frames, saves the viewport and quits, so the
+    // layout can be looked at instead of reasoned about from coordinates.
+    private void RunCapture()
+    {
+        if (!_captureEnabled)
+        {
+            return;
+        }
+
+        _captureFrames++;
+        if (_captureFrames == 2)
+        {
+            BeginInvestigation();
+            return;
+        }
+
+        if (_captureFrames < 12)
+        {
+            return;
+        }
+
+        Image image = GetViewport().GetTexture().GetImage();
+        string path = OS.GetCmdlineUserArgs()
+            .SkipWhile(argument => !string.Equals(
+                argument,
+                "--capture-ui",
+                StringComparison.OrdinalIgnoreCase))
+            .Skip(1)
+            .FirstOrDefault() ?? "ui.png";
+        _ = image.SavePng(path);
+        GD.Print($"HOTEL_2D_CAPTURE {path}");
+        GetTree().Quit(0);
     }
 
     // The shift ends when the clock passes dawn. IsComplete alone is not enough:
@@ -270,20 +313,20 @@ public sealed partial class Hotel2DPrototype : Node2D
             12,
             new Color("8491aa"));
 
-        _currentLocationLabel = AddLabel(
-            "CURRENT: HOTEL LOBBY",
-            new Vector2(540.0f, 20.0f),
-            new Vector2(300.0f, 32.0f),
-            14,
-            new Color("cbd5e1"),
-            clipText: true);
-
         _clockLabel = AddLabel(
             ClockText(0),
-            new Vector2(850.0f, 20.0f),
-            new Vector2(220.0f, 32.0f),
-            13,
-            new Color("b8c2d8"),
+            new Vector2(560.0f, 14.0f),
+            new Vector2(500.0f, 30.0f),
+            22,
+            new Color("e8eefc"),
+            clipText: true);
+
+        _currentLocationLabel = AddLabel(
+            string.Empty,
+            new Vector2(560.0f, 44.0f),
+            new Vector2(500.0f, 20.0f),
+            11,
+            new Color("8491aa"),
             clipText: true);
 
         _insightButton = AddActionButton(
@@ -315,7 +358,6 @@ public sealed partial class Hotel2DPrototype : Node2D
             var button = new Button
             {
                 Name = $"Room-{location.Id}",
-                Text = RoomButtonText(location),
                 Position = roomRect.Position,
                 Size = roomRect.Size,
                 TooltipText = RoomTooltip(location),
@@ -354,6 +396,15 @@ public sealed partial class Hotel2DPrototype : Node2D
             AddChild(button);
             BuildRoomFixtures(location, roomRect);
             _roomButtons[location.Id] = button;
+            Label roomLabel = AddLabel(
+                RoomButtonText(location),
+                roomRect.Position + new Vector2(10.0f, 7.0f),
+                new Vector2(Math.Max(40.0f, roomRect.Size.X - 20.0f), 34.0f),
+                12,
+                Colors.White,
+                clipText: true);
+            roomLabel.ZIndex = 4;
+            _roomLabels[locationId] = roomLabel;
         }
 
         BuildShiftAlert();
@@ -367,84 +418,47 @@ public sealed partial class Hotel2DPrototype : Node2D
         };
         AddChild(panel);
 
-        _roleLabel = AddLabel(T("YOUR ROLE", "บทบาทของคุณ"), new Vector2(895.0f, 96.0f), new Vector2(340.0f, 22.0f), 12, new Color("8091b3"));
+        // Laid out by advancing a cursor rather than by hand-picked coordinates.
+        // The previous fixed offsets had drifted into each other - the exposure
+        // block sat underneath the accusation button and was never visible at all.
+        _panelCursor = PanelTop;
+
+        _roleLabel = PanelHeading(T("YOUR ROLE", "บทบาทของคุณ"));
         CharacterDefinition host = _characters.GetValueOrDefault(_humanHost) ??
             throw new InvalidOperationException($"Human host '{_humanHost}' is missing.");
-        _roleValueLabel = AddLabel(
-            RoleText(host),
-            new Vector2(895.0f, 118.0f),
-            new Vector2(340.0f, 46.0f),
-            17,
-            new Color(host.Color),
-            clipText: true);
-        _objectiveHeadingLabel = AddLabel(T("CURRENT OBJECTIVE", "เป้าหมายปัจจุบัน"), new Vector2(895.0f, 170.0f), new Vector2(340.0f, 22.0f), 12, new Color("8091b3"));
-        _objectiveLabel = AddLabel(
-            ObjectiveText(),
-            new Vector2(895.0f, 194.0f),
-            new Vector2(340.0f, 64.0f),
-            13,
-            Colors.White,
-            autowrap: true,
-            clipText: true);
+        _roleValueLabel = PanelText(RoleText(host), 50.0f, 15, new Color(host.Color));
+        PanelGap();
 
-        _progressHeadingLabel = AddLabel(
-            T("INVESTIGATION STEPS", "ขั้นตอนการสืบสวน"),
-            new Vector2(895.0f, 266.0f),
-            new Vector2(340.0f, 22.0f),
-            12,
-            new Color("8091b3"));
-        _progressLabel = AddLabel(
-            string.Empty,
-            new Vector2(895.0f, 288.0f),
-            new Vector2(340.0f, 54.0f),
-            12,
-            new Color("d9e2f2"),
-            clipText: true);
+        // Directly under the identity block: this is who you are, and this is how
+        // the rest of the hotel has started to read you. It is the one number on
+        // screen that the player can change by choosing to act differently.
+        _exposureHeadingLabel = PanelHeading(T("HOW YOU LOOK", "คนอื่นมองคุณอย่างไร"));
+        _exposureLabel = PanelText(string.Empty, 50.0f, 12, new Color("8091b3"));
+        PanelGap();
 
-        // Sits directly under the identity block on purpose: this is who you are,
-        // and this is how the rest of the hotel is starting to read you.
-        _exposureHeadingLabel = AddLabel(
-            T("HOW YOU LOOK", "คนอื่นมองคุณอย่างไร"),
-            new Vector2(895.0f, 624.0f),
-            new Vector2(340.0f, 22.0f),
-            12,
-            new Color("8091b3"));
-        _exposureLabel = AddLabel(
-            string.Empty,
-            new Vector2(895.0f, 646.0f),
-            new Vector2(340.0f, 48.0f),
-            12,
-            new Color("8091b3"),
-            autowrap: true,
-            clipText: true);
+        _objectiveHeadingLabel = PanelHeading(T("CURRENT OBJECTIVE", "เป้าหมายปัจจุบัน"));
+        _objectiveLabel = PanelText(ObjectiveText(), 42.0f, 12, Colors.White);
 
-        _caseFeedLabel = AddLabel(T("WHAT JUST HAPPENED", "สิ่งที่เพิ่งเกิด"), new Vector2(895.0f, 350.0f), new Vector2(340.0f, 22.0f), 12, new Color("8091b3"));
-        _eventLabel = AddLabel(
+        // No heading of its own: "what to do next" is the same thought as the
+        // objective, and a separate header for it cost a line the panel needed.
+        _progressHeadingLabel = null;
+        _progressLabel = PanelText(string.Empty, 30.0f, 11, new Color("8fa3c4"));
+        PanelGap();
+
+        _caseFeedLabel = PanelHeading(T("WHAT JUST HAPPENED", "สิ่งที่เพิ่งเกิด"));
+        _eventLabel = PanelText(
             T("No witnessed event yet.", "ยังไม่มีเหตุการณ์ที่พบเห็น"),
-            new Vector2(895.0f, 372.0f),
-            new Vector2(340.0f, 36.0f),
+            28.0f,
             12,
-            new Color("cbd5e1"),
-            clipText: true);
-        _statusLabel = AddLabel(
-            string.Empty,
-            new Vector2(895.0f, 412.0f),
-            new Vector2(340.0f, 36.0f),
-            12,
-            new Color("f1d18a"),
-            autowrap: true,
-            clipText: true);
+            new Color("cbd5e1"));
+        _statusLabel = PanelText(string.Empty, 40.0f, 12, new Color("f1d18a"));
+        PanelGap();
 
-        _contextLabel = AddLabel(
-            T("PRESENT HERE", "อยู่ที่นี่"),
-            new Vector2(895.0f, 456.0f),
-            new Vector2(340.0f, 20.0f),
-            11,
-            new Color("8091b3"));
+        _contextLabel = PanelHeading(T("PRESENT HERE", "อยู่ที่นี่"));
         _actorSelector = new OptionButton
         {
-            Position = new Vector2(895.0f, 478.0f),
-            Size = new Vector2(215.0f, 34.0f),
+            Position = new Vector2(PanelLeft, _panelCursor),
+            Size = new Vector2(PanelWidth - 123.0f, 32.0f),
             TooltipText = T("Characters currently in the same room", "ตัวละครที่อยู่ห้องเดียวกัน"),
             MouseDefaultCursorShape = Control.CursorShape.PointingHand,
         };
@@ -454,57 +468,52 @@ public sealed partial class Hotel2DPrototype : Node2D
         _actorSelector.Visible = false;
         _talkButton = AddActionButton(
             T("1  TALK", "1  คุย"),
-            new Vector2(1118.0f, 478.0f),
-            new Vector2(117.0f, 34.0f),
+            new Vector2(PanelLeft + PanelWidth - 117.0f, _panelCursor),
+            new Vector2(117.0f, 32.0f),
             OpenSelectedConversation);
         _talkButton.TooltipText = T("Ask the selected character", "ถามตัวละครที่เลือก");
         _talkButton.Visible = false;
+        _panelCursor += 36.0f;
+
         _followButton = AddActionButton(
             T("2  FOLLOW SELECTED", "2  ติดตามคนที่เลือก"),
-            new Vector2(895.0f, 516.0f),
-            new Vector2(340.0f, 32.0f),
+            new Vector2(PanelLeft, _panelCursor),
+            new Vector2(PanelWidth, 30.0f),
             ToggleFollowSelected);
-        _followButton.TooltipText = T("Follow the selected character between rooms", "ติดตามตัวละครที่เลือกเมื่อย้ายห้อง");
+        _followButton.TooltipText = T(
+            "Follow the selected character between rooms",
+            "ติดตามตัวละครที่เลือกเมื่อย้ายห้อง");
         _followButton.Visible = false;
+        _panelCursor += 38.0f;
 
+        // Kept off-screen: nothing reads its selection any more, but the refresh
+        // path still fills it and removing it would touch several call sites.
         _objectSelector = new OptionButton
         {
-            Position = new Vector2(895.0f, 552.0f),
-            Size = new Vector2(215.0f, 34.0f),
-            TooltipText = T("Objects currently in the same room", "วัตถุที่อยู่ห้องเดียวกัน"),
-            MouseDefaultCursorShape = Control.CursorShape.PointingHand,
+            Position = new Vector2(-1000.0f, -1000.0f),
+            Size = new Vector2(1.0f, 1.0f),
+            Visible = false,
         };
-        _objectSelector.AddThemeFontSizeOverride("font_size", 13);
         AddChild(_objectSelector);
-        _objectSelector.Visible = false;
-        _inspectButton = AddActionButton(
-            T("LOOK AROUND", "สำรวจห้อง"),
-            new Vector2(895.0f, 490.0f),
-            new Vector2(340.0f, 42.0f),
-            OpenInspectionChoices);
-        _inspectButton.TooltipText = T("See what George can inspect in this room", "ดูสิ่งที่จอร์จตรวจสอบได้ในห้องนี้");
-        _journalButton = AddActionButton(
-            T("OPEN CASE FILE", "เปิดแฟ้มคดี"),
-            new Vector2(895.0f, 540.0f),
-            new Vector2(340.0f, 42.0f),
-            OpenJournal);
-        _journalButton.TooltipText = T("Review the clues George remembers", "ทบทวนเบาะแสที่จอร์จจำได้");
-        _evidenceButton = AddActionButton(
-            T("5  USE A CLUE", "5  ใช้เบาะแส"),
-            new Vector2(1118.0f, 590.0f),
-            new Vector2(117.0f, 38.0f),
-            OpenEvidenceSelection);
-        _evidenceButton.TooltipText = T("Select evidence to confront someone", "เลือกหลักฐานเพื่อเผชิญหน้า");
-        _evidenceButton.Visible = false;
 
-        _deduceButton = AddActionButton(
+        _inspectButton = PanelButton(
+            T("LOOK AROUND", "สำรวจห้อง"),
+            OpenInspectionChoices,
+            T("See what George can inspect in this room", "ดูสิ่งที่จอร์จตรวจสอบได้ในห้องนี้"));
+        _journalButton = PanelButton(
+            T("OPEN CASE FILE", "เปิดแฟ้มคดี"),
+            OpenJournal,
+            T("Review the clues George remembers", "ทบทวนเบาะแสที่จอร์จจำได้"));
+        _evidenceButton = PanelButton(
+            T("5  USE A CLUE", "5  ใช้เบาะแส"),
+            OpenEvidenceSelection,
+            T("Select evidence to confront someone", "เลือกหลักฐานเพื่อเผชิญหน้า"));
+        _deduceButton = PanelButton(
             T("MAKE AN ACCUSATION", "กล่าวหาผู้ต้องสงสัย"),
-            new Vector2(895.0f, 590.0f),
-            new Vector2(340.0f, 42.0f),
-            () => OpenFinalDeduction(deadlineReached: false));
-        _deduceButton.TooltipText = T(
-            "Name who is secretly being controlled by the Player",
-            "ระบุว่าใครกำลังถูกผู้ควบคุมบงการอย่างลับ ๆ");
+            () => OpenFinalDeduction(deadlineReached: false),
+            T(
+                "Name who is secretly being controlled by the Player",
+                "ระบุว่าใครกำลังถูกผู้ควบคุมบงการอย่างลับ ๆ"));
 
         _investigationOverlay = new InvestigationOverlay();
         _investigationOverlay.Closed += OnInvestigationOverlayClosed;
@@ -659,7 +668,7 @@ public sealed partial class Hotel2DPrototype : Node2D
 
             Vector2 offset = new(
                 -34.0f + ((index % 3) * 34.0f),
-                -22.0f + ((index / 3) * 34.0f));
+                -8.0f + ((index / 3) * 34.0f));
             _worldAdapter.RegisterActor(actor, token, offset);
             index++;
         }
@@ -929,10 +938,17 @@ public sealed partial class Hotel2DPrototype : Node2D
 
         if (_currentLocationLabel is not null)
         {
-            _currentLocationLabel.Text =
-                $"{T("CURRENT", "ปัจจุบัน")}: {DisplayLocation(_simulation.PlayerController.CurrentLocation)}";
+            // Left alone once the closing net has taken this line over.
+            if (_confrontationTick is null)
+            {
+                _currentLocationLabel.Text =
+                    $"{T("YOU ARE IN", "คุณอยู่ที่")} {DisplayLocation(_simulation.PlayerController.CurrentLocation).ToUpperInvariant()}";
+            }
         }
 
+        string[] adjacent = _simulation.PlayerController.GetAdjacentLocations()
+            .Select(location => location.Value)
+            .ToArray();
         foreach ((string id, Button roomButton) in _roomButtons)
         {
             HotelLocationDefinition? location = _hotel?.Locations.SingleOrDefault(item => item.Id == id);
@@ -944,8 +960,20 @@ public sealed partial class Hotel2DPrototype : Node2D
             bool isCurrent = id == _simulation.PlayerController.CurrentLocation.Value;
             int occupantCount = _characters.Keys.Count(actor =>
                 _simulation.GetLogicalLocation(actor).Value == id);
-            roomButton.Text = RoomButtonText(location, isCurrent, occupantCount);
+            SetRoomLabel(location, isCurrent, occupantCount);
             roomButton.Disabled = isCurrent;
+
+            // Rooms you cannot walk to from here are dimmed rather than left
+            // looking identical. Clicking one used to be the only way to find out,
+            // and being told "no accessible route" is not a floor plan.
+            bool reachable = isCurrent || adjacent.Contains(id, StringComparer.Ordinal);
+            roomButton.Modulate = reachable
+                ? Colors.White
+                : new Color(1.0f, 1.0f, 1.0f, 0.45f);
+            if (_roomLabels.TryGetValue(new LocationId(id), out Label? roomLabel))
+            {
+                roomLabel.Modulate = roomButton.Modulate;
+            }
         }
 
         _actorSelector.Clear();
@@ -1950,6 +1978,16 @@ public sealed partial class Hotel2DPrototype : Node2D
                 _exposureLabel.AddThemeColorOverride("font_color", new Color("e06c75"));
             }
 
+            // The line under the clock is where the player already looks for time
+            // pressure, so the deadline that matters most takes it over.
+            if (_currentLocationLabel is not null)
+            {
+                _currentLocationLabel.Text = T(
+                    $"THEY WILL MOVE ON YOU IN {remaining} MINUTES",
+                    $"พวกเขาจะลงมือกับคุณในอีก {remaining} นาที");
+                _currentLocationLabel.AddThemeColorOverride("font_color", new Color("e06c75"));
+            }
+
             return;
         }
 
@@ -2064,7 +2102,9 @@ public sealed partial class Hotel2DPrototype : Node2D
 
     private void RefreshExposure()
     {
-        if (_simulation is null || !_gameStarted)
+        // Runs before the shift starts too, so the panel opens with a real reading
+        // instead of a blank block the player has to wait out.
+        if (_simulation is null)
         {
             return;
         }
@@ -2545,7 +2585,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                 int? occupantCount = _simulation is null
                     ? null
                     : _characters.Keys.Count(actor => _simulation.GetLogicalLocation(actor).Value == id);
-                button.Text = RoomButtonText(location, isCurrent, occupantCount);
+                SetRoomLabel(location, isCurrent, occupantCount);
                 button.TooltipText = RoomTooltip(location);
             }
         }
@@ -3230,6 +3270,20 @@ public sealed partial class Hotel2DPrototype : Node2D
             "Investigate the basement door and identify the hidden Player before dawn.",
             "สืบสวนประตูห้องใต้ดินและหาผู้ควบคุมที่ซ่อนอยู่ให้พบก่อนรุ่งเช้า");
 
+    private void SetRoomLabel(
+        HotelLocationDefinition location,
+        bool isCurrent,
+        int? occupantCount)
+    {
+        if (_roomLabels.TryGetValue(new LocationId(location.Id), out Label? label))
+        {
+            label.Text = RoomButtonText(location, isCurrent, occupantCount);
+            label.AddThemeColorOverride(
+                "font_color",
+                isCurrent ? new Color("f1d18a") : Colors.White);
+        }
+    }
+
     private string RoomButtonText(
         HotelLocationDefinition location,
         bool isCurrent = false,
@@ -3238,7 +3292,9 @@ public sealed partial class Hotel2DPrototype : Node2D
         string prefix = isCurrent ? "●  " : string.Empty;
         string name = DisplayLocation(new LocationId(location.Id));
         string icon = RoomIcon(location.Id);
-        string people = occupantCount is null
+        // Seven rooms all announcing "0 people" was noise that buried the one
+        // room where anybody actually was.
+        string people = occupantCount is null or 0
             ? string.Empty
             : $"  •  {occupantCount} {T("people", "คน")}";
         return location.Restricted
@@ -3289,6 +3345,53 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
     }
 
+    private const float PanelLeft = 895.0f;
+    private const float PanelWidth = 340.0f;
+    private const float PanelTop = 96.0f;
+
+    private float _panelCursor = PanelTop;
+
+    private Label PanelHeading(string text)
+    {
+        Label label = AddLabel(
+            text,
+            new Vector2(PanelLeft, _panelCursor),
+            new Vector2(PanelWidth, 16.0f),
+            11,
+            new Color("8091b3"),
+            clipText: true);
+        _panelCursor += 18.0f;
+        return label;
+    }
+
+    private Label PanelText(string text, float height, int fontSize, Color color)
+    {
+        Label label = AddLabel(
+            text,
+            new Vector2(PanelLeft, _panelCursor),
+            new Vector2(PanelWidth, height),
+            fontSize,
+            color,
+            autowrap: true,
+            clipText: true);
+        _panelCursor += height + 2.0f;
+        return label;
+    }
+
+    private void PanelGap() => _panelCursor += 6.0f;
+
+    private Button PanelButton(string text, Action onPressed, string tooltip)
+    {
+        Button button = AddActionButton(
+            text,
+            new Vector2(PanelLeft, _panelCursor),
+            new Vector2(PanelWidth, 34.0f),
+            onPressed);
+        button.TooltipText = tooltip;
+        _panelCursor += 37.0f;
+        return button;
+    }
+
     private Label AddLabel(
         string text,
         Vector2 position,
@@ -3312,6 +3415,11 @@ public sealed partial class Hotel2DPrototype : Node2D
         label.AddThemeFontSizeOverride("font_size", fontSize);
         label.AddThemeColorOverride("font_color", color);
         AddChild(label);
+
+        // Wrapping needs a width the Control will actually keep. Setting only Size
+        // let long objective and status lines run off the edge of the screen.
+        label.CustomMinimumSize = size;
+        label.Size = size;
         return label;
     }
 
