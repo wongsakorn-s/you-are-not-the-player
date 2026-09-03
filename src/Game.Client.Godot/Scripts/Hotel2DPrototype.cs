@@ -4,6 +4,7 @@ using Game.Client.Godot.Gameplay;
 using Game.Client.Godot.Presentation;
 using Game.Client.Godot.World;
 using Game.Sim.Actions;
+using Game.Sim.Cases;
 using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
@@ -48,6 +49,7 @@ public sealed partial class Hotel2DPrototype : Node2D
     private HotelWorldDefinition? _hotel;
     private PlayableCaseDefinition? _caseDefinition;
     private DialogueNarrativeFormatter? _dialogueFormatter;
+    private SessionTruth? _truth;
     private Label? _clockLabel;
     private Label? _statusLabel;
     private Label? _eventLabel;
@@ -125,8 +127,19 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         BuildPresentation();
-        _simulation = CreateSimulation(_caseDefinition.Seed);
-        _shiftDirector = new NightShiftDirector(_caseDefinition.Seed);
+
+        // The seed, not the content file, decides who is really being steered.
+        // A replay hands us a fresh seed, so the same hotel poses a new question.
+        ulong seed = _replaySeed ?? _caseDefinition.Seed;
+        _truth = CaseGenerator.Generate(seed, new CaseGenerationOptions(
+            _humanHost,
+            _characters.Keys,
+            NightShiftDirector.DeadlineTick,
+            pinnedHiddenPlayer: ToEntityId(_caseDefinition.HiddenPlayer),
+            pinnedIncidentCulprit: ToEntityId(_caseDefinition.IncidentCulprit),
+            pinnedArchetype: _caseDefinition.ParsedPlayerArchetype));
+        _simulation = CreateSimulation(seed, _truth);
+        _shiftDirector = new NightShiftDirector(seed);
         _simulation.PlayerController.SetPlayerEntity(_humanHost);
         InitializeNpcActivities();
         BuildCharacterTokens();
@@ -143,9 +156,9 @@ public sealed partial class Hotel2DPrototype : Node2D
         {
             _simulation.SetPaused(true);
             _worldAdapter.SetMovementPaused(true);
-            if (_replayRequested)
+            if (_replaySeed is not null)
             {
-                _replayRequested = false;
+                _replaySeed = null;
                 BeginInvestigation();
             }
             else
@@ -1902,7 +1915,7 @@ public sealed partial class Hotel2DPrototype : Node2D
 
     private void ResolveFinalDeduction(EntityId suspect)
     {
-        if (_simulation is null || _caseDefinition is null || _gameEnded)
+        if (_simulation is null || _caseDefinition is null || _truth is null || _gameEnded)
         {
             return;
         }
@@ -1913,10 +1926,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         _worldAdapter.SetMovementPaused(true);
         RefreshProgress();
 
-        bool correct = string.Equals(
-            suspect.Value,
-            _caseDefinition.HiddenPlayer,
-            StringComparison.OrdinalIgnoreCase);
+        bool correct = _truth is not null && suspect == _truth.HiddenPlayer;
         PlayerJournal journal = _simulation.GetPlayerJournal(_humanHost);
         string title = correct
             ? T("THE NAME YOU SPOKE", "ชื่อที่คุณเอ่ยออกไป")
@@ -1983,18 +1993,29 @@ public sealed partial class Hotel2DPrototype : Node2D
     // ReloadCurrentScene builds a brand new node, so the replay intent cannot ride
     // on an instance field. Without this both endings' buttons reloaded into the
     // title menu and "replay the night" was indistinguishable from "back to title".
-    private static bool _replayRequested;
+    private static ulong? _replaySeed;
 
     private void RestartShift()
     {
-        _replayRequested = true;
+        _replaySeed = NextReplaySeed(_truth?.Seed ?? _caseDefinition?.Seed ?? 0UL);
         GetTree().ReloadCurrentScene();
     }
 
     private void ReturnToTitle()
     {
-        _replayRequested = false;
+        _replaySeed = null;
         GetTree().ReloadCurrentScene();
+    }
+
+    // SplitMix64's mixing step: consecutive replays land far apart in the seed
+    // space, so the next night is a genuinely different case rather than a
+    // neighbour of the last one.
+    private static ulong NextReplaySeed(ulong seed)
+    {
+        ulong next = unchecked(seed + 0x9E3779B97F4A7C15UL);
+        next = unchecked((next ^ (next >> 30)) * 0xBF58476D1CE4E5B9UL);
+        next = unchecked((next ^ (next >> 27)) * 0x94D049BB133111EBUL);
+        return next ^ (next >> 31);
     }
 
     private void ApplyLanguage(bool useThai, bool showStatus)
@@ -2763,14 +2784,17 @@ public sealed partial class Hotel2DPrototype : Node2D
         return new Rect2(center - new Vector2(width, height) / 2.0f, new Vector2(width, height));
     }
 
-    private static BasementRealtimeAdapter CreateSimulation(ulong seed)
+    private static BasementRealtimeAdapter CreateSimulation(ulong seed, SessionTruth truth)
     {
         InMemorySuspicionRuleRepository rules = JsonSuspicionRuleParser.Parse(
             File.ReadAllText(ResolveContentPath("SuspicionRules", "mvp.json")));
         BasementScenarioSession session = new BasementScenario(rules).CreateSession(
-            new BasementScenarioOptions(seed, ticks: NightShiftDirector.DeadlineTick));
+            new BasementScenarioOptions(seed, ticks: NightShiftDirector.DeadlineTick, truth));
         return new BasementRealtimeAdapter(session);
     }
+
+    private static EntityId? ToEntityId(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : new EntityId(value);
 
     private static HotelWorldDefinition LoadHotelDefinition() =>
         HotelWorldDefinitionParser.Parse(

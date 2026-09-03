@@ -8,15 +8,22 @@ public sealed record PlayableCaseDefinition(
     string CaseId,
     string Title,
     string HumanHost,
-    string HiddenPlayer,
-    string IncidentCulprit,
-    string PlayerArchetype,
+    string? HiddenPlayer,
+    string? IncidentCulprit,
+    string? PlayerArchetype,
     string OpeningLocation,
     string Objective,
     ulong Seed)
 {
-    public PlayerAiArchetype ParsedPlayerArchetype =>
-        Enum.Parse<PlayerAiArchetype>(PlayerArchetype, ignoreCase: true);
+    /// <summary>
+    /// Content overrides for the hidden truth. Anything left null is chosen by the
+    /// seed instead, which is what makes two runs pose different questions. The
+    /// first playable case pins only the culprit, because its ending prose names
+    /// who opened the basement door.
+    /// </summary>
+    public PlayerAiArchetype? ParsedPlayerArchetype => PlayerArchetype is null
+        ? null
+        : Enum.Parse<PlayerAiArchetype>(PlayerArchetype, ignoreCase: true);
 
     public void ValidateReferences(
         CharacterCatalogDefinition characters,
@@ -26,8 +33,15 @@ public sealed record PlayableCaseDefinition(
         ArgumentNullException.ThrowIfNull(hotel);
 
         _ = characters.GetCharacter(HumanHost);
-        _ = characters.GetCharacter(HiddenPlayer);
-        _ = characters.GetCharacter(IncidentCulprit);
+        if (HiddenPlayer is not null)
+        {
+            _ = characters.GetCharacter(HiddenPlayer);
+        }
+
+        if (IncidentCulprit is not null)
+        {
+            _ = characters.GetCharacter(IncidentCulprit);
+        }
 
         if (!hotel.Locations.Any(location => location.Id == OpeningLocation))
         {
@@ -65,16 +79,25 @@ public static class PlayableCaseDefinitionParser
         ValidateText(definition.CaseId, "Case ID");
         ValidateText(definition.Title, "Case title");
         ValidateText(definition.HumanHost, "Human host");
-        ValidateText(definition.HiddenPlayer, "Hidden player");
-        ValidateText(definition.IncidentCulprit, "Incident culprit");
-        ValidateText(definition.PlayerArchetype, "Player archetype");
+        ValidateOptionalText(definition.HiddenPlayer, "Hidden player");
+        ValidateOptionalText(definition.IncidentCulprit, "Incident culprit");
+        ValidateOptionalText(definition.PlayerArchetype, "Player archetype");
         ValidateText(definition.OpeningLocation, "Opening location");
         ValidateText(definition.Objective, "Case objective");
 
-        if (!Enum.TryParse(definition.PlayerArchetype, ignoreCase: true, out PlayerAiArchetype _))
+        if (definition.PlayerArchetype is { } archetype &&
+            !Enum.TryParse(archetype, ignoreCase: true, out PlayerAiArchetype _))
         {
-            throw new FormatException(
-                $"Unknown player archetype '{definition.PlayerArchetype}'.");
+            throw new FormatException($"Unknown player archetype '{archetype}'.");
+        }
+    }
+
+    // Absent means "let the seed decide"; present but blank is a content mistake.
+    private static void ValidateOptionalText(string? value, string fieldName)
+    {
+        if (value is not null)
+        {
+            ValidateText(value, fieldName);
         }
     }
 

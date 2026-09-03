@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (รอเชื่อมเข้ากับ deterministic case generation), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 178/178 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 201/201 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -30,7 +30,7 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **Floor-plan & Ending Pass:** เปลี่ยนแผนที่จาก node graph เป็นผังพื้นที่ภายใน/ภายนอกที่อ่านเป็นห้อง ทางเดิน ประตู และจุดใช้งานได้ พร้อมฉากจบสองช่วง (`คำกล่าวหา → ผลที่ตามมา`) ซึ่งอ้างเบาะแสจริงที่เด่นที่สุดของรอบนั้น.
 - **Thai Localization Audit:** UI, tooltip, objective, บทสนทนา, แฟ้มคดี และฉากจบรองรับไทย/อังกฤษ; ใช้คำไทยว่า “ผู้ควบคุม” ในเนื้อหาแทนคำระบบ `Player` และเพิ่ม smoke/regression check ป้องกันหัวข้อ journal หรือชื่อ George ภาษาอังกฤษหลุดในโหมดไทย.
 - **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
-- **Seed Variation Gap:** SimRunner deterministic และผ่านทุก scenario แต่การทดสอบ 10 seed ยังได้ fingerprint เดียวกัน จึงต้องเพิ่ม `SessionTruth` / `CaseGenerator` ให้ seed เลือก Hidden Player, Incident Culprit, secrets และ anomaly schedule โดยไม่เปิด hidden truth ให้ NPC.
+- **Deterministic Case Generation:** เพิ่ม `Game.Sim/Cases/` ประกอบด้วย `SessionTruth`, `CaseGenerator`, `CaseGenerationOptions`, `SecretAssignment` และ `AnomalyBeat`; seed เดียวกันได้ case เดิมเสมอ ส่วน seed ต่างกันเปลี่ยน Hidden Player, archetype, Incident Culprit, secrets และ anomaly schedule โดย content พินค่าใดไว้ก็ได้ (first playable case พินเฉพาะ `incidentCulprit` เพราะบทจบอ้างถึงโดยตรง); `BasementScenarioOptions.Truth` เป็น optional จึงไม่กระทบ fingerprint ของ 4 regression scenario เดิม.
 
 คำสั่งตรวจสอบระบบ:
 
@@ -804,6 +804,7 @@ Perception      = event-driven
 game/
 ├── src/
 │   ├── Game.Sim/
+│   │   ├── Cases/
 │   │   ├── Entities/
 │   │   ├── Time/
 │   │   ├── Events/
@@ -2433,7 +2434,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Automated tests ผ่าน (178/178 tests passed)
+- [x] Automated tests ผ่าน (201/201 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2489,11 +2490,11 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 1. **Milestone 1 — Format & Content Lock (เสร็จแล้ว):** ยืนยันรายชื่อตัวละคร/role, first playable case และ mapping ระหว่างตัวละครใน narrative (`Clara`, `Elias`, `Mira`) กับ internal IDs ปัจจุบัน (`charlie`, `dana`, `evelyn`).
 2. **Milestone 2 — 2D Graybox (เสร็จระดับ playable):** แผนที่โรงแรม 8 ห้องแสดงโครงสร้างพื้นที่ ประตู ทางเดินและจุดใช้งาน, character tokens ไม่บังห้อง, click-to-move, clock/schedule และ event feedback ทำงานแล้ว; art ยังเป็น placeholder.
 3. **Milestone 3 — Investigation UX (เสร็จระดับ playable vertical slice):** หน้าแรก/ตั้งค่า/onboarding, contextual character actions, Follow, Visual Novel dialogue, inspect, แฟ้มคดีแบบแบ่งหน้า, continuous-time night shift, Insight View, final accusation และ narrative aftermath ใช้งานได้แล้ว; เหลือ external playtest รอบใหม่เพื่อปรับ pacing/wording/เวลา.
-4. **Milestone 4 — Deterministic Case Generation:** เพิ่ม `SessionTruth` / `CaseGenerator`; seed เดิมต้องได้ case/trace เดิม ส่วน seed ต่างกันต้องเปลี่ยน Hidden Player, culprit, secrets หรือ anomaly schedule อย่างควบคุมได้.
+4. **Milestone 4 — Deterministic Case Generation (เสร็จแล้ว):** `SessionTruth` / `CaseGenerator` ใช้ PCG32 stream แยก (`RandomSequence = 7717`) จึงไม่เลื่อนลำดับสุ่มของ simulation; seed เดิมได้ case/trace เดิม และ replay ใช้ seed ใหม่จึงได้คดีใหม่ โดย hidden truth ไม่รั่วเข้า WorldEvent/Observation/Memory/Suspicion (บังคับด้วย `SessionTruthIsolationTests`). ยังเปิดทางเลือก `AllowHostAsHiddenPlayer` ไว้ให้ Milestone 5 เปิดตอนมีฉากจบ "You Were The Player".
 5. **Milestone 5 — Accusation & Endings (ฐานแรกเสร็จแล้ว):** เลือกผู้ถูกกล่าวหาและแสดงฉาก `คำกล่าวหา → ผลที่ตามมา` สำหรับคำตอบถูก/ผิดได้แล้ว; หลังมี `SessionTruth` ให้ขยาย Correct Accusation, False Accusation และ You Were The Player ตาม case variation.
 6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 178/178 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 201/201 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 
@@ -2515,7 +2516,7 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 - [x] ปรับ floor plan, token visibility, case-file pagination และฉากจบเชิงเนื้อเรื่องสองช่วง
 - [x] ตรวจคำแปลไทยและเพิ่ม regression check ใน Thai smoke test
 - [ ] เก็บ external playtest เพื่อปรับ pacing, wording และ contextual action edge cases
-- [ ] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
+- [x] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ
 

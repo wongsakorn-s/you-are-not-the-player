@@ -48,6 +48,8 @@ public sealed class BasementScenarioSession
     private readonly List<WorldEvent> _newEvents = [];
     private readonly List<NpcRoutineDecision> _decisions = [];
     private readonly Dictionary<EntityId, SimTime> _firstSuspicion = [];
+    private readonly EntityId _hiddenPlayer;
+    private readonly PlayerAiArchetype _hiddenPlayerArchetype;
     private WorldEvent? _restrictedEntry;
     private NpcRoutineDecision? _annaInitialDecision;
     private NpcRoutineDecision? _bobInitialDecision;
@@ -65,6 +67,11 @@ public sealed class BasementScenarioSession
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
+
+        // Without a truth the session keeps its scripted arrangement, which is what
+        // the regression scenarios and their pinned fingerprints depend on.
+        _hiddenPlayer = options.Truth?.HiddenPlayer ?? BasementScenario.George;
+        _hiddenPlayerArchetype = options.Truth?.HiddenPlayerArchetype ?? PlayerAiArchetype.Explorer;
         _world = CreateWorld();
 
         if (initialTick > 0)
@@ -142,13 +149,7 @@ public sealed class BasementScenarioSession
             _objectActions);
 
         var playerDirector = new PlayerAiDirector(
-            [new PlayerAiProfile(
-                BasementScenario.George,
-                PlayerAiArchetype.Explorer,
-                explorationObjectives: [new ExplorationObjective(
-                    "explore-basement",
-                    BasementScenario.Basement,
-                    "basement-door")])],
+            [CreatePlayerAiProfile(_hiddenPlayer, _hiddenPlayerArchetype)],
             _interactions,
             probes);
         _playerRoutine = new NpcRoutineSystem(
@@ -158,7 +159,7 @@ public sealed class BasementScenarioSession
             new UtilityNpcBrain([new ScheduleGoalSource(), playerDirector]),
             [playerDirector]);
         _playerRoutine.Register(CreateRoutineProfile(
-            BasementScenario.George,
+            _hiddenPlayer,
             BasementScenario.Lobby));
 
         var behaviorProfiles = new SuspicionBehaviorRepository([
@@ -189,21 +190,26 @@ public sealed class BasementScenarioSession
             _movement,
             new UtilityNpcBrain([new ScheduleGoalSource(), behaviorGoals]),
             [behaviorActions]);
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Anna,
-            BasementScenario.Basement));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Bob,
-            BasementScenario.Lobby));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Charlie,
-            BasementScenario.Lobby));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Dana,
-            BasementScenario.Lobby));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Evelyn,
-            BasementScenario.Lobby));
+        // Whoever the Player AI is steering is deliberately left out: two routine
+        // systems issuing movement for the same actor would cancel each other's
+        // requests every tick.
+        (EntityId Entity, LocationId Home)[] behaviorRoster =
+        [
+            (BasementScenario.Anna, BasementScenario.Basement),
+            (BasementScenario.Bob, BasementScenario.Lobby),
+            (BasementScenario.Charlie, BasementScenario.Lobby),
+            (BasementScenario.Dana, BasementScenario.Lobby),
+            (BasementScenario.Evelyn, BasementScenario.Lobby),
+        ];
+        foreach ((EntityId entity, LocationId home) in behaviorRoster)
+        {
+            if (entity == _hiddenPlayer)
+            {
+                continue;
+            }
+
+            _behaviorRoutine.Register(CreateRoutineProfile(entity, home));
+        }
     }
 
     public ulong Seed => _options.Seed;
@@ -275,7 +281,7 @@ public sealed class BasementScenarioSession
             Phase = BasementSessionPhase.ExplorerMovement;
         }
         else if (Phase == BasementSessionPhase.WaitingForExplorer &&
-                 movement.Actor == BasementScenario.George)
+                 movement.Actor == _hiddenPlayer)
         {
             Phase = BasementSessionPhase.FeedbackLoop;
         }
@@ -296,7 +302,7 @@ public sealed class BasementScenarioSession
             Phase = BasementSessionPhase.WitnessMovement;
         }
         else if (Phase == BasementSessionPhase.WaitingForExplorer &&
-                 movement.Actor == BasementScenario.George)
+                 movement.Actor == _hiddenPlayer)
         {
             Phase = BasementSessionPhase.ExplorerMovement;
         }
@@ -603,7 +609,7 @@ public sealed class BasementScenarioSession
         session.Phase = Enum.Parse<BasementSessionPhase>(snapshot.Metadata.Phase, ignoreCase: true);
 
         session._restrictedEntry = session._events.FirstOrDefault(e =>
-            e.Actor == BasementScenario.George &&
+            e.Actor == session._hiddenPlayer &&
             e.Location == BasementScenario.Basement &&
             e.Type == EventType.EnterLocation);
 
@@ -683,13 +689,13 @@ public sealed class BasementScenarioSession
             memory =>
                 memory.Kind == MemoryKind.Social &&
                 memory.RootEventId == _restrictedEntry.Id,
-            "Bob did not retain exactly one social memory of George's basement entry.");
+            $"Bob did not retain exactly one social memory of {_hiddenPlayer}'s basement entry.");
         SuspicionSnapshot annaSuspicion = GetSuspicion(
             BasementScenario.Anna,
-            BasementScenario.George);
+            _hiddenPlayer);
         SuspicionSnapshot bobSuspicion = GetSuspicion(
             BasementScenario.Bob,
-            BasementScenario.George);
+            _hiddenPlayer);
         EnsureSuspicionExists(annaSuspicion, "Anna");
         EnsureSuspicionExists(bobSuspicion, "Bob");
 
@@ -714,7 +720,7 @@ public sealed class BasementScenarioSession
             _bobInitialDecision,
             GetLogicalLocation(BasementScenario.Anna),
             GetLogicalLocation(BasementScenario.Bob),
-            GetLogicalLocation(BasementScenario.George));
+            GetLogicalLocation(_hiddenPlayer));
     }
 
     private void RunInitialInteraction()
@@ -746,7 +752,7 @@ public sealed class BasementScenarioSession
         IReadOnlyList<NpcRoutineDecision> decisions = _playerRoutine.Tick(SimDelta.OneTick);
         _decisions.AddRange(decisions);
         ProcessPendingEvents();
-        Phase = _movement.IsBusy(BasementScenario.George)
+        Phase = _movement.IsBusy(_hiddenPlayer)
             ? BasementSessionPhase.WaitingForExplorer
             : BasementSessionPhase.FeedbackLoop;
     }
@@ -803,7 +809,7 @@ public sealed class BasementScenarioSession
         {
             _events.Add(worldEvent);
             _newEvents.Add(worldEvent);
-            if (worldEvent.Actor == BasementScenario.George &&
+            if (worldEvent.Actor == _hiddenPlayer &&
                 worldEvent.Type == EventType.EnterLocation &&
                 worldEvent.Tags.Contains(EventTag.Restricted))
             {
@@ -829,7 +835,7 @@ public sealed class BasementScenarioSession
 
         SuspicionSnapshot bobSnapshot = GetSuspicion(
             BasementScenario.Bob,
-            BasementScenario.George);
+            _hiddenPlayer);
         if (bobSnapshot.Evidence.Count > 0)
         {
             _firstSuspicion.TryAdd(BasementScenario.Bob, _clock.Now);
@@ -900,6 +906,42 @@ public sealed class BasementScenarioSession
             requiresAccess: true);
         return graph;
     }
+
+    // PlayerAiProfile validates that the objective set matches the archetype, so
+    // each archetype gets the objectives it is defined by: an Explorer probes a
+    // boundary, a Completionist exhausts interactions, a Roleplayer does neither
+    // and is only visible through how ordinary it tries to look.
+    private static PlayerAiProfile CreatePlayerAiProfile(
+        EntityId entity,
+        PlayerAiArchetype archetype) => archetype switch
+        {
+            PlayerAiArchetype.Explorer => new PlayerAiProfile(
+                entity,
+                archetype,
+                explorationObjectives: [new ExplorationObjective(
+                    "explore-basement",
+                    BasementScenario.Basement,
+                    "basement-door")]),
+            PlayerAiArchetype.Completionist => new PlayerAiProfile(
+                entity,
+                archetype,
+                completionObjectives:
+                [
+                    new CompletionObjective(
+                        "sweep-lobby",
+                        BasementScenario.Lobby,
+                        InteractionKind.Generic),
+                    new CompletionObjective(
+                        "sweep-kitchen",
+                        new LocationId("kitchen"),
+                        InteractionKind.LootContainer),
+                ]),
+            PlayerAiArchetype.Roleplayer => new PlayerAiProfile(entity, archetype),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(archetype),
+                archetype,
+                "Unknown archetype."),
+        };
 
     private static NpcRoutineProfile CreateRoutineProfile(
         EntityId entity,
