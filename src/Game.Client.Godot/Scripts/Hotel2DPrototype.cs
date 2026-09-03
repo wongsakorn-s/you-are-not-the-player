@@ -5,6 +5,7 @@ using Game.Client.Godot.Presentation;
 using Game.Client.Godot.World;
 using Game.Sim.Actions;
 using Game.Sim.Cases;
+using Game.Sim.Conspiracy;
 using Game.Sim.Entities;
 using Game.Sim.Events;
 using Game.Sim.Locations;
@@ -54,6 +55,9 @@ public sealed partial class Hotel2DPrototype : Node2D
     private Label? _exposureLabel;
     private ExposureLevel _lastExposureLevel = ExposureLevel.Unnoticed;
     private ExposureReport? _exposure;
+    private CoalitionStage? _lastCoalitionStage;
+    private long? _confrontationTick;
+    private bool _climaxOpen;
     private Label? _clockLabel;
     private Label? _statusLabel;
     private Label? _eventLabel;
@@ -187,6 +191,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             HandleSimulationChanges();
             ProcessShiftBeats();
             RefreshExposure();
+            RefreshClosingNet();
         }
 
         if (_clockLabel is not null && _simulation is not null)
@@ -1882,6 +1887,171 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         RefreshContextActions();
+    }
+
+    /// <summary>
+    /// How long the cast takes to act once they agree. The night needs a shape,
+    /// and a coalition that struck the instant it agreed would end the run before
+    /// the player could see it coming - the whole point is watching it close.
+    /// </summary>
+    private const long ConfrontationGraceTicks = 45;
+
+    /// <summary>
+    /// Combined concern across the coalition needed before it will move. Two
+    /// witnesses to one restricted-area entry score roughly 56 between them, so
+    /// this takes a pattern rather than a single mistake.
+    /// </summary>
+    private const float ClosingNetThreshold = 90.0f;
+
+    private void RefreshClosingNet()
+    {
+        if (_simulation is null || !_gameStarted || _gameEnded || _climaxOpen)
+        {
+            return;
+        }
+
+        AccusationCoalition? coalition = _simulation.EvaluateConspiracy(_humanHost);
+        if (coalition is null || coalition.Target != _humanHost)
+        {
+            return;
+        }
+
+        if (coalition.Stage != _lastCoalitionStage)
+        {
+            AnnounceCoalition(coalition);
+            _lastCoalitionStage = coalition.Stage;
+        }
+
+        // Agreement alone is not enough to arm it. Being seen once somewhere odd is
+        // damning but survivable, so the bar is set in the coalition's own units,
+        // well above the score two witnesses to a single incident would produce.
+        // Deliberately not gated on ExposureLevel: that meter answers "how much do
+        // you look like the Player", which is a different question from "how much
+        // trouble are you in", and gating one on the other would let the meter
+        // quietly misreport the danger.
+        bool armed = coalition.ConsensusReached &&
+            coalition.CombinedSuspicionScore >= ClosingNetThreshold;
+        if (!armed)
+        {
+            return;
+        }
+
+        _confrontationTick ??= _simulation.CurrentTick + ConfrontationGraceTicks;
+        long remaining = _confrontationTick.Value - _simulation.CurrentTick;
+        if (remaining > 0)
+        {
+            // Runs after RefreshExposure, so this appends to the line it just wrote.
+            // The player has to be able to watch it close, not just be told it did.
+            if (_exposureLabel is not null)
+            {
+                _exposureLabel.Text += T(
+                    $"\nThey will move on you in {remaining} minutes.",
+                    $"\nพวกเขาจะลงมือกับคุณในอีก {remaining} นาที");
+                _exposureLabel.AddThemeColorOverride("font_color", new Color("e06c75"));
+            }
+
+            return;
+        }
+
+        _ = _simulation.TriggerConfrontation(_simulation.GetLogicalLocation(_humanHost));
+        OpenClimax(coalition);
+    }
+
+    private void AnnounceCoalition(AccusationCoalition coalition)
+    {
+        string who = string.Join(", ", coalition.Members
+            .Where(member => member != _humanHost)
+            .Select(DisplayName)
+            .OrderBy(name => name, StringComparer.CurrentCulture));
+        (string english, string thai) = coalition.Stage switch
+        {
+            CoalitionStage.ConsensusReached => (
+                $"{who} have stopped comparing notes. They have agreed on something.",
+                $"{who} หยุดเทียบข้อมูลกันแล้ว พวกเขาตกลงอะไรบางอย่างได้"),
+            CoalitionStage.Confronting => (
+                $"{who} are coming to find you.",
+                $"{who} กำลังเดินมาหาคุณ"),
+            _ => (
+                $"{who} were talking quietly. They stopped when you came in.",
+                $"{who} คุยกันเบา ๆ แล้วเงียบลงตอนคุณเดินเข้ามา"),
+        };
+
+        ShowShiftAlert(new ShiftBeat(
+            _simulation?.CurrentTick ?? 0,
+            ShiftBeatKind.FinalWarning,
+            english,
+            thai));
+    }
+
+    private void OpenClimax(AccusationCoalition coalition)
+    {
+        if (_simulation is null || _climaxOpen)
+        {
+            return;
+        }
+
+        _climaxOpen = true;
+        _simulation.SetPaused(true);
+        _worldAdapter.SetMovementPaused(true);
+
+        string who = string.Join(", ", coalition.Members
+            .Where(member => member != _humanHost)
+            .Select(DisplayName)
+            .OrderBy(name => name, StringComparer.CurrentCulture));
+        ShowInvestigationScreen(
+            T("THEY NAME YOU", "พวกเขาเอ่ยชื่อคุณ"),
+            T(
+                $"{who} block the way. Nobody raises their voice.\n\n" +
+                    "They have been comparing what they saw all night, and every version " +
+                    "of it ends with you. You do not get to ask any more questions.",
+                $"{who} ยืนขวางทางไว้ ไม่มีใครขึ้นเสียง\n\n" +
+                    "พวกเขาเทียบสิ่งที่เห็นกันมาทั้งคืน และทุกเวอร์ชันจบลงที่คุณ " +
+                    "คุณไม่มีโอกาสถามอะไรอีกแล้ว"),
+            new Color("e06c75"),
+            [
+                new InvestigationChoice(
+                    T("Tell them what you really are", "บอกไปว่าคุณเป็นอะไรจริง ๆ"),
+                    () => ResolveClimaxChoice(PlayerClimaxChoice.ConfessReality)),
+                new InvestigationChoice(
+                    T("Deny it and turn it back on them", "ปฏิเสธและย้อนกลับใส่พวกเขา"),
+                    () => ResolveClimaxChoice(PlayerClimaxChoice.DenyAndCounter)),
+                new InvestigationChoice(
+                    T("Run", "วิ่ง"),
+                    () => ResolveClimaxChoice(PlayerClimaxChoice.Flee)),
+            ],
+            allowClose: false,
+            showPortrait: false);
+    }
+
+    private void ResolveClimaxChoice(PlayerClimaxChoice choice)
+    {
+        if (_simulation is null || _gameEnded)
+        {
+            return;
+        }
+
+        _gameEnded = true;
+        _hasConcluded = true;
+        RefreshProgress();
+        ClimaxResolution resolution = _simulation.ResolveClimax(choice, _humanHost);
+
+        // The player never got to make an accusation, so the case file cannot
+        // close. What the night leaves behind is what they did when it was their
+        // turn to be the suspect.
+        ShowInvestigationScreen(
+            LocalizeText(resolution.Title),
+            LocalizeText(resolution.NarrativeText),
+            new Color(resolution.PlayerVindicated ? "77dd77" : "e06c75"),
+            [
+                new InvestigationChoice(
+                    T("REPLAY THE NIGHT", "เล่นกะคืนนี้ใหม่"),
+                    RestartShift),
+                new InvestigationChoice(
+                    T("BACK TO TITLE", "กลับหน้าแรก"),
+                    ReturnToTitle),
+            ],
+            allowClose: false,
+            showPortrait: false);
     }
 
     private static readonly Dictionary<ExposureLevel, string> ExposureColors = new()
