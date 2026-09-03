@@ -70,7 +70,11 @@ public sealed class ObjectActionHandler
                 Message: $"{obj.DisplayName} is securely locked. (Requires: {obj.RequiredKeyId ?? "key"})");
         }
 
-        EventTag[] tags = obj.IsSuspiciousToTamper ? SuspiciousTags : StandardTags;
+        // Looking at something is not the same as prying it open. The flag is
+        // IsSuspiciousToTamper, and tagging a plain inspection with it made simply
+        // reading the guest logbook as incriminating as forcing the wall safe -
+        // which would punish the player for the most ordinary act of investigating.
+        EventTag[] tags = StandardTags;
         WorldEvent worldEvent = _events.Create(
             actor,
             EventType.Interaction,

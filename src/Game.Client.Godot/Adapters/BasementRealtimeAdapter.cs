@@ -101,6 +101,8 @@ public sealed class BasementRealtimeAdapter
     public SuspicionSnapshot GetSuspicion(EntityId observer, EntityId subject) =>
         _session.GetSuspicion(observer, subject);
 
+    public ExposureReport GetExposure(EntityId host) => _session.GetExposure(host);
+
     public void Interact(EntityId actor, string interactionId) =>
         _session.Interact(actor, interactionId);
 

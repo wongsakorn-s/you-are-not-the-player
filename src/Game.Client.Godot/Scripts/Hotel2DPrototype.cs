@@ -50,6 +50,10 @@ public sealed partial class Hotel2DPrototype : Node2D
     private PlayableCaseDefinition? _caseDefinition;
     private DialogueNarrativeFormatter? _dialogueFormatter;
     private SessionTruth? _truth;
+    private Label? _exposureHeadingLabel;
+    private Label? _exposureLabel;
+    private ExposureLevel _lastExposureLevel = ExposureLevel.Unnoticed;
+    private ExposureReport? _exposure;
     private Label? _clockLabel;
     private Label? _statusLabel;
     private Label? _eventLabel;
@@ -182,11 +186,15 @@ public sealed partial class Hotel2DPrototype : Node2D
         {
             HandleSimulationChanges();
             ProcessShiftBeats();
+            RefreshExposure();
         }
 
         if (_clockLabel is not null && _simulation is not null)
         {
-            _clockLabel.Text = ClockText(_simulation.CurrentTick);
+            _clockLabel.Text = _exposure is null || _exposure.Level == ExposureLevel.Unnoticed
+                ? ClockText(_simulation.CurrentTick)
+                : $"{ClockText(_simulation.CurrentTick)}  •  " +
+                    ExposureFormatter.FormatBadge(_exposure, _isThai);
             _investigationOverlay?.SetTimeText(
                 !_gameStarted
                     ? string.Empty
@@ -386,6 +394,23 @@ public sealed partial class Hotel2DPrototype : Node2D
             new Vector2(340.0f, 54.0f),
             12,
             new Color("d9e2f2"),
+            clipText: true);
+
+        // Sits directly under the identity block on purpose: this is who you are,
+        // and this is how the rest of the hotel is starting to read you.
+        _exposureHeadingLabel = AddLabel(
+            T("HOW YOU LOOK", "คนอื่นมองคุณอย่างไร"),
+            new Vector2(895.0f, 624.0f),
+            new Vector2(340.0f, 22.0f),
+            12,
+            new Color("8091b3"));
+        _exposureLabel = AddLabel(
+            string.Empty,
+            new Vector2(895.0f, 646.0f),
+            new Vector2(340.0f, 48.0f),
+            12,
+            new Color("8091b3"),
+            autowrap: true,
             clipText: true);
 
         _caseFeedLabel = AddLabel(T("WHAT JUST HAPPENED", "สิ่งที่เพิ่งเกิด"), new Vector2(895.0f, 350.0f), new Vector2(340.0f, 22.0f), 12, new Color("8091b3"));
@@ -1170,20 +1195,28 @@ public sealed partial class Hotel2DPrototype : Node2D
                     partner))),
         };
 
-        foreach (EntityId subject in _characters.Keys
-                     .Where(actor => actor != partner && actor != _humanHost)
-                     .Take(3))
+        // Gossip about a third party is the highest-value thing anyone can give
+        // you, so it is the first thing they stop giving once they have enough on
+        // you. Everything else stays open: exposure raises the price of
+        // investigating, it never takes the game away.
+        bool refusesGossip = _exposure?.RefusesToGossipWith(partner) == true;
+        if (!refusesGossip)
         {
-            EntityId selectedSubject = subject;
-            choices.Add(new InvestigationChoice(
-                $"{T("Ask about", "ถามเกี่ยวกับ")} {DisplayName(selectedSubject)}",
-                () => ExecuteDialogue(
-                    partner,
-                    new DialogueRequest(
-                        DialogueActionKind.AskAboutSubject,
-                        _humanHost,
+            foreach (EntityId subject in _characters.Keys
+                         .Where(actor => actor != partner && actor != _humanHost)
+                         .Take(3))
+            {
+                EntityId selectedSubject = subject;
+                choices.Add(new InvestigationChoice(
+                    $"{T("Ask about", "ถามเกี่ยวกับ")} {DisplayName(selectedSubject)}",
+                    () => ExecuteDialogue(
                         partner,
-                        subject: selectedSubject))));
+                        new DialogueRequest(
+                            DialogueActionKind.AskAboutSubject,
+                            _humanHost,
+                            partner,
+                            subject: selectedSubject))));
+            }
         }
 
         if (_presentObjects.Count > 0)
@@ -1214,9 +1247,47 @@ public sealed partial class Hotel2DPrototype : Node2D
             return;
         }
 
+        if (request.Kind == DialogueActionKind.AskAboutSubject &&
+            _exposure?.RefusesToGossipWith(partner) == true)
+        {
+            ShowRefusal(partner);
+            return;
+        }
+
         DialogueOutcome outcome = _simulation.Talk(request);
-        ShowDialogueOutcome(partner, request, outcome);
+        ShowDialogueOutcome(partner, request, outcome, prefix: GuardedPrefix(partner));
     }
+
+    private void ShowRefusal(EntityId partner)
+    {
+        string who = DisplayName(partner);
+        ShowInvestigationScreen(
+            $"{T("CONVERSATION WITH", "บทสนทนากับ")} {who}",
+            T(
+                $"{who} looks at you for a moment too long.\n\n" +
+                    "“I am not going to talk about other people with you. Not tonight.”\n\n" +
+                    "Whatever they have been keeping about you, it is now enough that "  +
+                    "they would rather say nothing.",
+                $"{who} มองคุณนานกว่าปกติหนึ่งจังหวะ\n\n" +
+                    "“ฉันจะไม่พูดถึงคนอื่นกับคุณ ไม่ใช่คืนนี้”\n\n" +
+                    "สิ่งที่เขาเก็บไว้เกี่ยวกับคุณมากพอจะทำให้เขาเลือกที่จะเงียบแล้ว"),
+            new Color("e06c75"),
+            [new InvestigationChoice(
+                T("Ask something else", "ถามอย่างอื่น"),
+                () => OpenConversation(partner))]);
+        RefreshStatus(T(
+            $"{who} refused to talk about anyone else.",
+            $"{who} ปฏิเสธที่จะพูดถึงคนอื่น"));
+    }
+
+    // Short of a refusal there is still a tell: the answer arrives, but it arrives
+    // carefully. This is the warning shot before gossip closes off entirely.
+    private string? GuardedPrefix(EntityId partner) =>
+        _exposure?.IsGuardedTowards(partner) != true
+            ? null
+            : T(
+                $"{DisplayName(partner)} answers slowly, choosing words as if you might repeat them.",
+                $"{DisplayName(partner)} ตอบช้าลง เลือกคำพูดราวกับกลัวว่าคุณจะเอาไปเล่าต่อ");
 
     private void ExecuteObjectInquiry(EntityId partner, InteractiveObject obj)
     {
@@ -1254,7 +1325,8 @@ public sealed partial class Hotel2DPrototype : Node2D
         EntityId partner,
         DialogueRequest request,
         DialogueOutcome outcome,
-        string? objectName = null)
+        string? objectName = null,
+        string? prefix = null)
     {
         if (outcome.Succeeded)
         {
@@ -1271,6 +1343,11 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         string body = BuildDialogueResultBody(partner, request, outcome, objectName);
+        if (!string.IsNullOrEmpty(prefix))
+        {
+            body = $"{prefix}\n\n{body}";
+        }
+
         ShowInvestigationScreen(
             $"{T("CONVERSATION WITH", "บทสนทนากับ")} {DisplayName(partner)}",
             body,
@@ -1447,6 +1524,9 @@ public sealed partial class Hotel2DPrototype : Node2D
         choices.Add(new InvestigationChoice(
             T("PEOPLE TO WATCH", "คนที่ควรจับตา"),
             () => OpenPeopleToWatch(view, page.PageNumber - 1)));
+        choices.Add(new InvestigationChoice(
+            T("HOW YOU LOOK", "คนอื่นมองคุณอย่างไร"),
+            () => OpenExposurePage(view, page.PageNumber - 1)));
         ShowInvestigationScreen(
             T("CLUE JOURNAL", "บันทึกเบาะแส"),
             page.Text,
@@ -1498,6 +1578,26 @@ public sealed partial class Hotel2DPrototype : Node2D
             [new InvestigationChoice(
                 T("BACK TO CLUES", "กลับไปที่เบาะแส"),
                 () => OpenJournalPage(returnView, returnPage))]);
+    }
+
+    private void OpenExposurePage(JournalView returnView, int returnPage)
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        ExposureReport exposure = _simulation.GetExposure(_humanHost);
+        _exposure = exposure;
+        ShowInvestigationScreen(
+            $"{T("HOW YOU LOOK", "คนอื่นมองคุณอย่างไร")}  •  " +
+                ExposureFormatter.FormatBadge(exposure, _isThai),
+            ExposureFormatter.FormatDetail(exposure, DisplayName, _isThai),
+            new Color(ExposureColors[exposure.Level]),
+            [new InvestigationChoice(
+                T("BACK TO CLUES", "กลับไปที่เบาะแส"),
+                () => OpenJournalPage(returnView, returnPage))],
+            showPortrait: false);
     }
 
     private static TimelineFilter? BuildJournalFilter(JournalView view, PlayerJournal journal) =>
@@ -1637,6 +1737,58 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         RefreshContextActions();
+    }
+
+    private static readonly Dictionary<ExposureLevel, string> ExposureColors = new()
+    {
+        [ExposureLevel.Unnoticed] = "8091b3",
+        [ExposureLevel.Noticed] = "d9c27a",
+        [ExposureLevel.Watched] = "e2954a",
+        [ExposureLevel.Cornered] = "e06c75",
+    };
+
+    private void RefreshExposure()
+    {
+        if (_simulation is null || !_gameStarted)
+        {
+            return;
+        }
+
+        _exposure = _simulation.GetExposure(_humanHost);
+        if (_exposureLabel is not null)
+        {
+            _exposureLabel.Text = ExposureFormatter.FormatSummary(_exposure, DisplayName, _isThai);
+            _exposureLabel.AddThemeColorOverride(
+                "font_color",
+                new Color(ExposureColors[_exposure.Level]));
+        }
+
+        if (_exposureHeadingLabel is not null)
+        {
+            _exposureHeadingLabel.Text =
+                $"{T("HOW YOU LOOK", "คนอื่นมองคุณอย่างไร")}  •  " +
+                ExposureFormatter.FormatBadge(_exposure, _isThai);
+        }
+
+        // Only a rise is worth interrupting for. Exposure cannot fall inside one
+        // shift - nobody forgets what they saw an hour ago - so this fires at most
+        // three times a night and each one should land.
+        if (_exposure.Level > _lastExposureLevel && !_gameEnded)
+        {
+            AnnounceExposureRise(_exposure);
+        }
+
+        _lastExposureLevel = _exposure.Level;
+    }
+
+    private void AnnounceExposureRise(ExposureReport exposure)
+    {
+        string summary = ExposureFormatter.FormatSummary(exposure, DisplayName, _isThai);
+        ShowShiftAlert(new ShiftBeat(
+            _simulation?.CurrentTick ?? 0,
+            ShiftBeatKind.FinalWarning,
+            summary,
+            summary));
     }
 
     private void RefreshProgress()
@@ -2344,7 +2496,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             GD.Print(
                 $"HOTEL_2D_SMOKE_PASS rooms={_hotel.Locations.Length} " +
                 $"actors={_characters.Count} host={_humanHost.Value} " +
-                "dialogue=pass inspect=pass journal=pass");
+                "dialogue=pass inspect=pass journal=pass exposure=pass");
             GetTree().Quit(0);
         }
         else if (_smokeElapsed >= 8.0)
@@ -2352,6 +2504,74 @@ public sealed partial class Hotel2DPrototype : Node2D
             GD.PushError("HOTEL_2D_SMOKE_FAIL movement did not complete within 8 seconds");
             GetTree().Quit(1);
         }
+    }
+
+    private bool _smokeExposureCompleted;
+
+    private void RunExposureSmoke()
+    {
+        if (_simulation is null || _smokeExposureCompleted)
+        {
+            return;
+        }
+
+        _smokeExposureCompleted = true;
+
+        ExposureReport before = _simulation.GetExposure(_humanHost);
+        if (before.Level != ExposureLevel.Unnoticed)
+        {
+            throw new InvalidOperationException(
+                $"The host started the shift already exposed ('{before.Level}').");
+        }
+
+        ObjectActionResult tamper = _simulation.PlayerController.TamperObject("lobby-guest-registry");
+        if (!tamper.Succeeded)
+        {
+            throw new InvalidOperationException($"Smoke tamper failed: {tamper.Message}");
+        }
+
+        // Perception, memory and suspicion all run on tick advance, and the shift
+        // is paused while this runs, so the act has to be given time to be seen.
+        for (int index = 0; index < 4; index++)
+        {
+            _simulation.Step();
+        }
+
+        HandleSimulationChanges();
+        RefreshExposure();
+
+        ExposureReport after = _simulation.GetExposure(_humanHost);
+        if (after.Peak <= before.Peak || after.Observers.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "Tampering in front of a witness did not raise the host's exposure " +
+                $"(peak {before.Peak:F1} -> {after.Peak:F1}).");
+        }
+
+        string summary = ExposureFormatter.FormatSummary(after, DisplayName, _isThai);
+        string detail = ExposureFormatter.FormatDetail(after, DisplayName, _isThai);
+        if (string.IsNullOrWhiteSpace(summary) || string.IsNullOrWhiteSpace(detail))
+        {
+            throw new InvalidOperationException("Exposure produced no player-facing text.");
+        }
+
+        // Same rule as the rest of the player-facing pass: no raw scores, no
+        // internal dimension names, no entity ids.
+        foreach (string leak in new[] { "MetaBehavior", "RoleDeviation", "ImpossibleBehavior", "george" })
+        {
+            if (summary.Contains(leak, StringComparison.Ordinal) ||
+                detail.Contains(leak, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Exposure text leaked '{leak}'.");
+            }
+        }
+
+        if (_isThai && detail.Any(character => character is >= 'a' and <= 'z'))
+        {
+            throw new InvalidOperationException("Thai exposure detail contained English text.");
+        }
+
+        GD.Print($"HOTEL_2D_EXPOSURE level={after.Level} observers={after.Observers.Count}");
     }
 
     private bool RunInvestigationSmoke()
@@ -2457,6 +2677,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             {
                 throw new InvalidOperationException("Investigation overlay did not open.");
             }
+
+            RunExposureSmoke();
 
             _investigationOverlay.HideScreen();
             _worldAdapter.SetMovementPaused(false);

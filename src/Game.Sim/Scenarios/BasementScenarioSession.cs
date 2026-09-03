@@ -326,6 +326,46 @@ public sealed class BasementScenarioSession
     public SuspicionSnapshot GetSuspicion(EntityId observer, EntityId subject) =>
         _suspicion.GetSnapshot(observer, subject, _clock.Now);
 
+    /// <summary>
+    /// Turns the ordinary suspicion pipeline around and asks what the hotel has
+    /// on the host. Nothing hidden is consulted; every entry traces back to an
+    /// observation some NPC actually made.
+    /// </summary>
+    public ExposureReport GetExposure(EntityId host)
+    {
+        var observers = new List<ObserverExposure>();
+        var reasons = new List<ExposureReason>();
+        foreach (EntityState entity in _world.Entities.OrderBy(
+            entity => entity.Id.Value,
+            StringComparer.Ordinal))
+        {
+            if (entity.Id == host)
+            {
+                continue;
+            }
+
+            SuspicionSnapshot snapshot = GetSuspicion(entity.Id, host);
+            if (snapshot.Evidence.Count == 0)
+            {
+                continue;
+            }
+
+            observers.Add(new ObserverExposure(
+                entity.Id,
+                ExposureReport.WeighVector(snapshot.Vector),
+                ExposureReport.WeighPlayerLike(snapshot.Vector),
+                snapshot.Vector,
+                snapshot.Evidence.Count));
+            reasons.AddRange(snapshot.Evidence.Select(evidence => new ExposureReason(
+                entity.Id,
+                evidence.Contribution.RuleId,
+                evidence.Contribution.Dimension,
+                evidence.EffectiveStrength)));
+        }
+
+        return new ExposureReport(host, observers, reasons);
+    }
+
     public void Interact(EntityId actor, string interactionId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(interactionId);
