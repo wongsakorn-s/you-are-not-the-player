@@ -1,7 +1,7 @@
 # System-First Development Plan — NPC Reality Deduction Game
 
-> เวอร์ชันเอกสาร: 0.7
-> วันที่: 2026-09-01
+> เวอร์ชันเอกสาร: 0.9
+> วันที่: 2026-09-02
 > เป้าหมาย: เปลี่ยน technical prototype ที่พิสูจน์ระบบ NPC / Event / Memory / Suspicion / Reality Anomalies / Conspiracy แล้ว ให้เป็น First Fun Playtest ผ่าน 2D Top-Down Systemic Mystery + Visual Novel Hybrid
 
 ---
@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (รอเชื่อมเข้ากับ deterministic case generation), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 166/166 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (รอเชื่อมเข้ากับ deterministic case generation), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 178/178 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -23,7 +23,12 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **Presentation Direction:** เลือกเป้าหมายเป็น **Stylized 2D Top-Down Hotel Simulation + Visual Novel Dialogue + Detective Journal** เพื่อให้ schedule, movement, rumor และ suspicion อ่านง่ายและเหมาะกับผู้พัฒนา Godot มือใหม่.
 - **2D Graybox Foundation:** เพิ่ม production scene `Scenes2D/Main2D.tscn`, แผนที่โรงแรม 8 ห้อง, character tokens 6 คน, click-to-move, simulation clock, event feedback และ 2D movement acknowledgement โดยล็อก George เป็น Human Host; ตั้งฉากนี้เป็น main scene แล้ว.
 - **Data-driven First Case:** เพิ่ม `characters.json` และ `first-playable-case.json` พร้อม schema validation โดยล็อกเคสแรกเป็น George/Host, Clara (`charlie`)/Hidden Player และ George/Incident Culprit.
-- **Investigation UX Foundation:** แถบ contextual actions อ่านตัวละครและวัตถุจากห้องปัจจุบัน, Visual Novel overlay รองรับถาม schedule/บุคคล/วัตถุและ confront evidence, Inspect บันทึก clue และ Detective Journal แสดง source, confidence, root event และ suspicion score โดยหยุด simulation ระหว่างอ่าน.
+- **Investigation UX:** ลดแผงคำสั่งหลักเหลือ `สำรวจห้อง`, `เปิดแฟ้มคดี` และ `กล่าวหาผู้ต้องสงสัย`; คลิกตัวละครในห้องเพื่อเปิดคำสั่ง `คุย/ติดตาม/ถามด้วยเบาะแส` ตามบริบท แยกบทสนทนาออกจากบันทึกของจอร์จ และแบ่งแฟ้มคดีเป็นหน้าละ 2 เบาะแสแทน scrollbar ยาว.
+- **Guided Playtest UX:** เพิ่มหน้าแรก, วิธีเล่น, เมนูพักเกมและตั้งค่าใน flow เดียว; ภาษาเปลี่ยนเฉพาะใน Settings เพื่อลดหน้าซ้ำซ้อน, onboarding สรุปลูป `เดิน → สังเกต → เปรียบเทียบ → ตัดสินใจ`, ตัวละครใช้จุดขนาดเล็กและแสดงชื่อเฉพาะคนที่เลือกเพื่อไม่บังแผนที่.
+- **Playable Night Shift:** ขยาย prototype เป็นกะกลางคืน 360 นาทีในเกม (ประมาณ 3 นาทีจริง), เวลาและ AI เดินต่อระหว่างสนทนา, เพิ่ม deterministic shift beats/routines, เหตุการณ์แทรก, Insight View, final deduction, ผลชนะ–แพ้ และ replay loop.
+- **Player-facing Information Pass:** ซ่อน `T...`, event ID, root event, confidence percentage และ suspicion vector จาก UI; ใช้เวลาจริงในโลกเกม, ประโยค Who/What/Where, แหล่งที่มาแบบ “เห็นเอง/ได้ยินจาก” และระดับ “น่าเชื่อถือ/ควรจับตา” พร้อม tutorial ตัวอย่างก่อนเริ่มกะ.
+- **Floor-plan & Ending Pass:** เปลี่ยนแผนที่จาก node graph เป็นผังพื้นที่ภายใน/ภายนอกที่อ่านเป็นห้อง ทางเดิน ประตู และจุดใช้งานได้ พร้อมฉากจบสองช่วง (`คำกล่าวหา → ผลที่ตามมา`) ซึ่งอ้างเบาะแสจริงที่เด่นที่สุดของรอบนั้น.
+- **Thai Localization Audit:** UI, tooltip, objective, บทสนทนา, แฟ้มคดี และฉากจบรองรับไทย/อังกฤษ; ใช้คำไทยว่า “ผู้ควบคุม” ในเนื้อหาแทนคำระบบ `Player` และเพิ่ม smoke/regression check ป้องกันหัวข้อ journal หรือชื่อ George ภาษาอังกฤษหลุดในโหมดไทย.
 - **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
 - **Seed Variation Gap:** SimRunner deterministic และผ่านทุก scenario แต่การทดสอบ 10 seed ยังได้ fingerprint เดียวกัน จึงต้องเพิ่ม `SessionTruth` / `CaseGenerator` ให้ seed เลือก Hidden Player, Incident Culprit, secrets และ anomaly schedule โดยไม่เปิด hidden truth ให้ NPC.
 
@@ -54,10 +59,26 @@ godot --editor --path src/Game.Client.Godot
 
 ```bash
 godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --smoke-2d
+godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --smoke-2d --thai
 ```
 
 การทดสอบสำเร็จเมื่อ process คืน exit code `0` และแสดง `HOTEL_2D_SMOKE_PASS` โดยครอบคลุม
-การโหลด content, แผนที่ 8 ห้อง, ตัวละคร 6 คน, click-to-move และ movement acknowledgement กลับเข้า core.
+การโหลด content, แผนที่ 8 ห้อง, ตัวละคร 6 คน, click-to-move, movement acknowledgement,
+บทสนทนา, การตรวจวัตถุ, แฟ้มคดี และ localization ไทย/อังกฤษ.
+
+สร้าง Windows playtest package สำหรับผู้ทดสอบภายนอก:
+
+```powershell
+.\scripts\Build-Playtest.ps1 -GodotPath "C:\Path\To\godot.exe"
+```
+
+สคริปต์จะ build/test solution, export preset `Windows Desktop`, สร้าง zip พร้อม
+คู่มือผู้เล่นและ feedback template จาก `playtest/` โดยไม่รวม source code ใน package;
+moderator ใช้ `playtest/protocol.md` จาก repository แยกต่างหาก ผู้ทดสอบต้องใช้ Godot 4.7.2 .NET export templates บนเครื่อง build เท่านั้น
+ติดตั้งผ่าน Godot Editor > Editor > Manage Export Templates ก่อนรันสคริปต์ครั้งแรก
+
+เอกสารการทดลองอยู่ในโฟลเดอร์ [playtest](playtest/README.md) โดย `README.md` สำหรับผู้เล่น,
+`protocol.md` สำหรับ moderator และ `feedback-template.md` สำหรับแบบประเมินหลังเล่น
 
 ฉาก 3D เดิมยังเรียกตรวจ regression ได้ด้วย:
 
@@ -2412,7 +2433,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Determinism test ผ่าน (160/160 tests passed)
+- [x] Automated tests ผ่าน (178/178 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2466,13 +2487,13 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 ## 31.3 Revised Roadmap
 
 1. **Milestone 1 — Format & Content Lock (เสร็จแล้ว):** ยืนยันรายชื่อตัวละคร/role, first playable case และ mapping ระหว่างตัวละครใน narrative (`Clara`, `Elias`, `Mira`) กับ internal IDs ปัจจุบัน (`charlie`, `dana`, `evelyn`).
-2. **Milestone 2 — 2D Graybox (ฐานหลักเสร็จแล้ว):** สร้างแผนที่โรงแรม 8 ห้อง, character tokens, click-to-move, clock/schedule และ event feedback โดยใช้ placeholder ทั้งหมด; งานที่เหลือคือ contextual interaction และ readability ระหว่างการสืบสวน.
-3. **Milestone 3 — Investigation UX (กำลังพัฒนา):** contextual actions, Visual Novel dialogue, inspect และ Journal พร้อม source/confidence ใช้งานได้แล้ว; เหลือ Follow, evidence selection, Timeline filtering และปรับ dialogue content ให้อ่านเป็นธรรมชาติ.
+2. **Milestone 2 — 2D Graybox (เสร็จระดับ playable):** แผนที่โรงแรม 8 ห้องแสดงโครงสร้างพื้นที่ ประตู ทางเดินและจุดใช้งาน, character tokens ไม่บังห้อง, click-to-move, clock/schedule และ event feedback ทำงานแล้ว; art ยังเป็น placeholder.
+3. **Milestone 3 — Investigation UX (เสร็จระดับ playable vertical slice):** หน้าแรก/ตั้งค่า/onboarding, contextual character actions, Follow, Visual Novel dialogue, inspect, แฟ้มคดีแบบแบ่งหน้า, continuous-time night shift, Insight View, final accusation และ narrative aftermath ใช้งานได้แล้ว; เหลือ external playtest รอบใหม่เพื่อปรับ pacing/wording/เวลา.
 4. **Milestone 4 — Deterministic Case Generation:** เพิ่ม `SessionTruth` / `CaseGenerator`; seed เดิมต้องได้ case/trace เดิม ส่วน seed ต่างกันต้องเปลี่ยน Hidden Player, culprit, secrets หรือ anomaly schedule อย่างควบคุมได้.
-5. **Milestone 5 — Accusation & Endings:** ให้เลือกผู้ถูกกล่าวหาและหลักฐาน พร้อมเริ่มจาก Correct Accusation, False Accusation และ You Were The Player.
+5. **Milestone 5 — Accusation & Endings (ฐานแรกเสร็จแล้ว):** เลือกผู้ถูกกล่าวหาและแสดงฉาก `คำกล่าวหา → ผลที่ตามมา` สำหรับคำตอบถูก/ผิดได้แล้ว; หลังมี `SessionTruth` ให้ขยาย Correct Accusation, False Accusation และ You Were The Player ตาม case variation.
 6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate:** คืน CI, เพิ่ม headless tests/smoke test และ Windows export artifact ก่อนแจก build ให้ผู้ทดสอบภายนอก.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 178/178 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 
@@ -2487,7 +2508,13 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 - [x] ล็อก CharacterDefinition และ first playable case แบบ data-driven พร้อม validation
 - [x] สร้างฐาน 2D graybox: โรงแรม 8 ห้อง, tokens 6 คน, click-to-move, clock/event feedback และ headless smoke test
 - [x] เพิ่ม contextual Talk/Inspect, Visual Novel dialogue และ Detective Journal รุ่นแรก
-- [ ] เพิ่ม Follow, evidence selection, Timeline filters และ contextual action ที่ครอบคลุมวัตถุ/ตัวละครทุกกรณี
+- [x] เพิ่ม Follow NPC, evidence selection และ Timeline filters (เวลา/ตัวละคร/ห้อง/kind/event type)
+- [x] ปรับ dialogue content แบบ data-driven และเพิ่ม readability cues บน 2D HUD
+- [x] เพิ่มหน้าแรก/ตั้งค่า/onboarding, ลดคำสั่งหลักเหลือ 3 ปุ่ม และใช้ direct NPC selection จาก feedback 1/5
+- [x] เพิ่มกะกลางคืนแบบเวลาเดินต่อเนื่อง, AI shift beats, เหตุการณ์หักมุม, Insight View และตอนจบแพ้–ชนะ
+- [x] ปรับ floor plan, token visibility, case-file pagination และฉากจบเชิงเนื้อเรื่องสองช่วง
+- [x] ตรวจคำแปลไทยและเพิ่ม regression check ใน Thai smoke test
+- [ ] เก็บ external playtest เพื่อปรับ pacing, wording และ contextual action edge cases
 - [ ] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ

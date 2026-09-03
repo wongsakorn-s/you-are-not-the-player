@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "characters": {
+    "anna": {
+      "schedule": "I am on the night rounds. If you need me, keep your voice down and stay where the cameras can see you.",
+      "askAboutSubject": "I remember {subject} near {location} around {time}. That is all I am willing to confirm.",
+      "askAboutSubjectNoMemory": "I have not seen anything reliable about {subject}. Rumors travel faster than people in this hotel.",
+      "object": "The {object} belongs to the hotel's ordinary routine. If it looks out of place, someone wanted it noticed.",
+      "confront": "That memory is not the whole story. You should ask who benefits from making it sound certain.",
+      "thai": {
+        "schedule": "ฉันกำลังตรวจรอบกลางคืน ถ้าต้องการคุยช่วยลดเสียงลง และอยู่ในจุดที่กล้องมองเห็น",
+        "askAboutSubject": "ฉันจำได้ว่า {subject} อยู่แถว {location} ราวเวลา {time} นั่นคือทั้งหมดที่ฉันยืนยันได้",
+        "askAboutSubjectNoMemory": "ฉันยังไม่เห็นข้อมูลที่น่าเชื่อถือเกี่ยวกับ {subject} ข่าวลือในโรงแรมนี้เดินทางเร็วกว่าคนเสียอีก",
+        "object": "{object} เป็นของที่อยู่ในกิจวัตรปกติของโรงแรม ถ้ามันดูผิดที่ อาจมีคนอยากให้เราสังเกต",
+        "confront": "ความทรงจำนั้นยังไม่ใช่เรื่องทั้งหมด ลองถามว่าการทำให้มันดูแน่นอนเป็นประโยชน์กับใคร"
+      }
+    },
+    "bob": {
+      "schedule": "Security is never really off duty. I check the doors, the cameras, and anything that does not fit the log.",
+      "askAboutSubject": "I saw {subject} around {location} at {time}. I logged the movement, but I did not claim to understand it.",
+      "askAboutSubjectNoMemory": "No clean sighting of {subject}. If you heard a story, bring me the time and the room before you call it evidence.",
+      "object": "I know the {object}. It is harmless until somebody starts treating it like a shortcut through the rules.",
+      "confront": "You have a memory, not a verdict. Show me the missing time before you point that at me.",
+      "thai": {
+        "schedule": "งานรักษาความปลอดภัยไม่เคยหยุดจริง ฉันตรวจประตู กล้อง และทุกอย่างที่ไม่ตรงกับบันทึก",
+        "askAboutSubject": "ฉันเห็น {subject} แถว {location} ตอน {time} ฉันบันทึกการเคลื่อนไหว แต่ไม่ได้แปลว่ารู้เหตุผล",
+        "askAboutSubjectNoMemory": "ไม่มีหลักฐานชัดว่าเห็น {subject} ถ้ามีข่าวลือ บอกเวลาและห้องมาก่อนเรียกมันว่าหลักฐาน",
+        "object": "ฉันรู้จัก {object} มันไม่อันตราย จนกว่าจะมีใครใช้มันเป็นทางลัดฝ่าฝืนกฎ",
+        "confront": "คุณมีความทรงจำ ไม่ใช่คำตัดสิน แสดงช่วงเวลาที่หายไปก่อนจะชี้มาที่ฉัน"
+      }
+    },
+    "charlie": {
+      "schedule": "I am a guest. Guests are allowed to wander, especially when the hotel refuses to explain its locked doors.",
+      "askAboutSubject": "Perhaps {subject} was at {location} around {time}. Perhaps you only remember the version that helps you.",
+      "askAboutSubjectNoMemory": "I do not remember {subject}. That does not mean it did not happen; it means you should keep looking.",
+      "object": "The {object}? It is part of the hotel's little performance. Touch it if you want to know which rules are real.",
+      "confront": "You are very sure of that memory. Are you sure it belongs to you?",
+      "thai": {
+        "schedule": "ฉันเป็นแขก แขกมีสิทธิ์เดินไปมา โดยเฉพาะเมื่อโรงแรมไม่ยอมอธิบายประตูที่ล็อกไว้",
+        "askAboutSubject": "บางที {subject} อาจอยู่ที่ {location} ตอน {time} หรือคุณอาจจำเฉพาะเวอร์ชันที่เข้าข้างตัวเอง",
+        "askAboutSubjectNoMemory": "ฉันจำ {subject} ไม่ได้ นั่นไม่ได้แปลว่าไม่เกิดขึ้น แปลว่าคุณควรค้นหาต่อ",
+        "object": "{object} น่ะหรือ เป็นส่วนหนึ่งของการแสดงเล็ก ๆ ในโรงแรม ลองแตะดูถ้าอยากรู้ว่ากฎไหนเป็นของจริง",
+        "confront": "คุณมั่นใจในความทรงจำนั้นมาก แน่ใจหรือว่ามันเป็นความทรงจำของคุณ"
+      }
+    },
+    "dana": {
+      "schedule": "The kitchen keeps moving after midnight. I cook, I clean, and I try not to listen through the service door.",
+      "askAboutSubject": "I noticed {subject} near {location} at {time}. I was working, so I only caught the shape of the moment.",
+      "askAboutSubjectNoMemory": "Nothing I can swear to about {subject}. The kitchen makes every rumor smell like it came from somewhere else.",
+      "object": "The {object} is useful, which is why people pretend not to notice it. Useful things attract secrets.",
+      "confront": "That sounds bad when you say it like that. Give me the context, not just the timestamp.",
+      "thai": {
+        "schedule": "ครัวยังทำงานหลังเที่ยงคืน ฉันทำอาหาร ทำความสะอาด และพยายามไม่ฟังเสียงผ่านประตูบริการ",
+        "askAboutSubject": "ฉันสังเกตเห็น {subject} แถว {location} ตอน {time} แต่กำลังทำงาน เลยเห็นแค่รูปร่างของเหตุการณ์",
+        "askAboutSubjectNoMemory": "ฉันไม่มีอะไรยืนยันเกี่ยวกับ {subject} ห้องครัวทำให้ข่าวลือทุกเรื่องเหมือนมีที่มา",
+        "object": "{object} มีประโยชน์ นั่นเป็นเหตุผลที่คนแกล้งทำเป็นไม่เห็น ของที่มีประโยชน์มักดึงดูดความลับ",
+        "confront": "ฟังดูแย่เมื่อคุณเล่าแบบนั้น ขอรายละเอียดประกอบ ไม่ใช่แค่เวลา"
+      }
+    },
+    "evelyn": {
+      "schedule": "I keep the hotel operational. If something is wrong, I would prefer a report before a panic reaches the lobby.",
+      "askAboutSubject": "I saw {subject} associated with {location} at {time}. Association is not guilt, George.",
+      "askAboutSubjectNoMemory": "I have no confirmed account concerning {subject}. Please do not turn an empty record into an accusation.",
+      "object": "The {object} is recorded as hotel property. Anything beyond that should go through management.",
+      "confront": "You are building a story from fragments. Stories can be useful, but they can also become weapons.",
+      "thai": {
+        "schedule": "ฉันดูแลให้โรงแรมเดินต่อ หากมีอะไรผิดปกติ ขอรายงานก่อนที่ความตื่นตระหนกจะถึงล็อบบี้",
+        "askAboutSubject": "ฉันเห็น {subject} เกี่ยวข้องกับ {location} ตอน {time} การเกี่ยวข้องไม่ใช่ความผิดนะจอร์จ",
+        "askAboutSubjectNoMemory": "ฉันไม่มีรายงานยืนยันเกี่ยวกับ {subject} อย่าเปลี่ยนบันทึกที่ว่างเปล่าให้กลายเป็นข้อกล่าวหา",
+        "object": "{object} ถูกบันทึกเป็นทรัพย์สินของโรงแรม เรื่องอื่นควรผ่านฝ่ายจัดการ",
+        "confront": "คุณกำลังต่อเรื่องจากเศษเสี้ยว เรื่องเล่าอาจมีประโยชน์ แต่อาจกลายเป็นอาวุธได้"
+      }
+    },
+    "george": {
+      "schedule": "The front desk is open. I can answer questions, but I cannot promise the answers will make the hotel feel safer.",
+      "askAboutSubject": "I heard {subject} was around {location} at {time}. I would want another witness before I called that suspicious.",
+      "askAboutSubjectNoMemory": "I have no reliable note about {subject}. Check the room and the clock before trusting a hunch.",
+      "object": "The {object} is listed in the hotel inventory. If it is telling you a different story, write down exactly what changed.",
+      "confront": "That is one interpretation of the evidence. I would like to know what you are leaving out.",
+      "thai": {
+        "schedule": "เคาน์เตอร์ต้อนรับเปิดอยู่ ฉันตอบคำถามได้ แต่ไม่รับประกันว่าคำตอบจะทำให้โรงแรมปลอดภัยขึ้น",
+        "askAboutSubject": "ฉันได้ยินว่า {subject} อยู่แถว {location} ตอน {time} ฉันอยากได้พยานอีกคนก่อนเรียกว่าน่าสงสัย",
+        "askAboutSubjectNoMemory": "ฉันไม่มีบันทึกที่น่าเชื่อถือเกี่ยวกับ {subject} ตรวจห้องกับนาฬิกาก่อนเชื่อลางสังหรณ์",
+        "object": "{object} อยู่ในบัญชีสิ่งของของโรงแรม ถ้ามันเล่าเรื่องอีกแบบ จดให้ชัดว่าอะไรเปลี่ยนไป",
+        "confront": "นั่นเป็นเพียงการตีความหลักฐานแบบหนึ่ง ฉันอยากรู้ว่าคุณละอะไรไว้ไม่พูด"
+      }
+    }
+  }
+}

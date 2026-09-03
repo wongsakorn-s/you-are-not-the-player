@@ -118,6 +118,9 @@ public sealed class BasementRealtimeAdapter
 
     public NpcMovementExecution PlayerMove(LocationId destination) => _session.PlayerController.RequestMove(destination);
 
+    public NpcMovementExecution RequestNpcMove(EntityId actor, LocationId destination) =>
+        _session.RequestNpcMove(actor, destination);
+
     public void TogglePause() => IsPaused = !IsPaused;
 
     public void SetPaused(bool isPaused) => IsPaused = isPaused;

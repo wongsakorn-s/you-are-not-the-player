@@ -223,6 +223,9 @@ public sealed class BasementScenarioSession
 
     public IReadOnlyList<MovementSnapshot> PendingMovements => _movement.PendingMovements;
 
+    public NpcMovementExecution RequestNpcMove(EntityId actor, LocationId destination) =>
+        _movement.Execute(new MoveEntityCommand(actor, destination));
+
     public int ObservationCount => _observationCount;
 
     public bool AdvanceOneTick()

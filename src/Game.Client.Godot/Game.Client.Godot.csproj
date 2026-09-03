@@ -18,6 +18,10 @@
       <Link>Data\Characters\characters.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\Game.Content\Data\Dialogue\dialogue-lines.json">
+      <Link>Data\Dialogue\dialogue-lines.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="..\Game.Content\Data\Hotel\hotel-world.json">
       <Link>Data\Hotel\hotel-world.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
