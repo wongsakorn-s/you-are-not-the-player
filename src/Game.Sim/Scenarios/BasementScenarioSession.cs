@@ -184,16 +184,29 @@ public sealed class BasementScenarioSession
             _hiddenPlayer,
             BasementScenario.Lobby));
 
-        var behaviorProfiles = new SuspicionBehaviorRepository([
-            new SuspicionBehaviorProfile(
-                BasementScenario.Anna,
-                [BasementScenario.Bob],
-                BasementScenario.Lobby),
-            new SuspicionBehaviorProfile(
-                BasementScenario.Bob,
-                [],
-                BasementScenario.Lobby),
-        ]);
+        // Without a truth this stays the two hand-written profiles the scripted
+        // scenario was pinned against; with one, everybody can react to what they
+        // see and has somebody to tell.
+        SuspicionBehaviorRepository behaviorProfiles = options.Truth is null
+            ? new SuspicionBehaviorRepository([
+                new SuspicionBehaviorProfile(
+                    BasementScenario.Anna,
+                    [BasementScenario.Bob],
+                    BasementScenario.Lobby),
+                new SuspicionBehaviorProfile(
+                    BasementScenario.Bob,
+                    [],
+                    BasementScenario.Lobby),
+            ])
+            : new SuspicionBehaviorRepository(HotelRoles.Select(item =>
+                new SuspicionBehaviorProfile(
+                    item.Entity,
+                    HotelSocialGraph.Confidants(item.Role)
+                        .SelectMany(confidant => HotelRoles
+                            .Where(other => other.Role == confidant)
+                            .Select(other => other.Entity))
+                        .Where(contact => contact != item.Entity),
+                    HotelSocialGraph.SafePlace(item.Role))));
         var behaviorGoals = new SuspicionDrivenGoalSource(
             _suspicion,
             _memories,
