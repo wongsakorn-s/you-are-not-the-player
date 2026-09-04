@@ -28,7 +28,7 @@ public sealed class BasementScenarioSession
     private static readonly LocationId Hallway = new("hallway");
 
     private readonly BasementScenarioOptions _options;
-    private readonly SimClock _clock = new(ticksPerSecond: 1);
+    private readonly SimClock _clock;
     private readonly WorldState _world;
     private readonly WorldEventBuffer _buffer = new();
     private readonly CoordinatedNpcMovementExecutor _movement;
@@ -48,6 +48,7 @@ public sealed class BasementScenarioSession
     private readonly List<WorldEvent> _newEvents = [];
     private readonly List<NpcRoutineDecision> _decisions = [];
     private readonly Dictionary<EntityId, SimTime> _firstSuspicion = [];
+    private readonly RoleDutySystem? _duties;
     private readonly EntityId _hiddenPlayer;
     private readonly PlayerAiArchetype _hiddenPlayerArchetype;
     private WorldEvent? _restrictedEntry;
@@ -67,6 +68,16 @@ public sealed class BasementScenarioSession
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
+
+        // One tick is one minute of the night, starting at 23:00, so the schedules
+        // line up with the clock the player is shown. Without a truth this stays
+        // the real-time clock the pinned scenario fingerprints were taken against.
+        _clock = options.Truth is null
+            ? new SimClock(ticksPerSecond: 1)
+            : new SimClock(
+                ticksPerSecond: 1,
+                startOfDay: SimMinuteOfDay.FromHourMinute(23, 0),
+                ticksPerMinute: 1);
 
         // Without a truth the session keeps its scripted arrangement, which is what
         // the regression scenarios and their pinned fingerprints depend on.
@@ -105,6 +116,15 @@ public sealed class BasementScenarioSession
             new ExponentialMemoryDecayPolicy(0.0, 0.0));
         _suspicion = new SuspicionSystem(_memories, rules);
         _objects = HotelObjectRegistry.CreateDefaultHotelObjects();
+        if (options.Truth is not null)
+        {
+            _duties = new RoleDutySystem(_clock, _world, eventFactory, _buffer, patterns);
+            foreach ((EntityId entity, RoleId role) in HotelRoles)
+            {
+                _duties.Register(entity, role);
+            }
+        }
+
         _dialogue = new DialogueSystem(
             _clock,
             _world,
@@ -809,6 +829,10 @@ public sealed class BasementScenarioSession
 
     private void RunFeedbackTick()
     {
+        // Before the cast decides anything, ask whether anyone is already off
+        // their post. The event this publishes is what RoleNeglect counts and what
+        // the RoleDeviation suspicion rule scores.
+        _ = _duties?.Tick();
         IReadOnlyList<NpcRoutineDecision> decisions = _behaviorRoutine.Tick(SimDelta.OneTick);
         foreach (NpcRoutineDecision decision in decisions)
         {
@@ -993,10 +1017,46 @@ public sealed class BasementScenarioSession
                 "Unknown archetype."),
         };
 
-    private static NpcRoutineProfile CreateRoutineProfile(
+    /// <summary>
+    /// Who does what on this shift. Matches the roles in characters.json, which is
+    /// where this belongs once schedules move into content.
+    /// </summary>
+    private static readonly (EntityId Entity, RoleId Role)[] HotelRoles =
+    [
+        (BasementScenario.George, HotelNightRoutines.Receptionist),
+        (BasementScenario.Anna, HotelNightRoutines.Cleaner),
+        (BasementScenario.Bob, HotelNightRoutines.Security),
+        (BasementScenario.Charlie, HotelNightRoutines.Guest),
+        (BasementScenario.Dana, HotelNightRoutines.Cook),
+        (BasementScenario.Evelyn, HotelNightRoutines.Manager),
+    ];
+
+    private NpcRoutineProfile CreateRoutineProfile(
         EntityId entity,
         LocationId scheduleLocation)
     {
+        // With a truth in play the cast works a real night; without one they keep
+        // the flat Idle routine the scripted scenario was pinned against.
+        if (_options.Truth is not null)
+        {
+            RoleId assigned = HotelRoles
+                .FirstOrDefault(item => item.Entity == entity).Role;
+            if (!string.IsNullOrEmpty(assigned.Value))
+            {
+                DailySchedule roleSchedule = HotelNightRoutines.For(assigned);
+                LocationId home = roleSchedule.Entries[0].Location;
+                return new NpcRoutineProfile(
+                    entity,
+                    HotelNightRoutines.Permissions(assigned),
+                    roleSchedule,
+                    new NeedState(),
+                    // Needs stay switched off here: NeedGoalSource is not in the
+                    // brain yet, so growing them would only add unread state.
+                    new NeedProfile(new NeedRates(0.0, 0.0, 0.0), 0.0, 0.0, 0.0),
+                    new NeedDestinations(home, home, home));
+            }
+        }
+
         var role = new RolePermissions(
             new RoleId("resident"),
             [BasementScenario.Lobby, BasementScenario.Basement]);
