@@ -19,6 +19,22 @@ using Godot;
 
 namespace Game.Client.Godot.Scripts;
 
+/// <summary>
+/// How a night ends. The question the game asks is "who is being controlled",
+/// and the character the human drives was always one of the possible answers.
+/// </summary>
+public enum EndingKind
+{
+    /// <summary>Named the hidden player, and it was somebody else.</summary>
+    CorrectAccusation,
+
+    /// <summary>Named somebody who was not being steered.</summary>
+    FalseAccusation,
+
+    /// <summary>Named yourself, and you were right.</summary>
+    YouWereThePlayer,
+}
+
 /// <summary>Which slice of the case file the player is currently reading.</summary>
 public enum JournalView
 {
@@ -152,7 +168,11 @@ public sealed partial class Hotel2DPrototype : Node2D
             NightShiftDirector.DeadlineTick,
             pinnedHiddenPlayer: ToEntityId(_caseDefinition.HiddenPlayer),
             pinnedIncidentCulprit: ToEntityId(_caseDefinition.IncidentCulprit),
-            pinnedArchetype: _caseDefinition.ParsedPlayerArchetype));
+            pinnedArchetype: _caseDefinition.ParsedPlayerArchetype,
+            // Roughly one night in six, the character the human is driving turns
+            // out to be the one being steered. The accusation screen can name the
+            // host now, so the case is answerable.
+            allowHostAsHiddenPlayer: true));
         _simulation = CreateSimulation(seed, _truth);
         _shiftDirector = new NightShiftDirector(seed);
         _simulation.PlayerController.SetPlayerEntity(_humanHost);
@@ -2480,6 +2500,13 @@ public sealed partial class Hotel2DPrototype : Node2D
             })
             .ToList();
 
+        // The question was always "who is being controlled", and George has been
+        // on the list of candidates the whole time. Naming yourself has to be
+        // sayable, or the one answer the game is really about cannot be given.
+        choices.Add(new InvestigationChoice(
+            T("Say it was you", "เอ่ยชื่อตัวเอง"),
+            () => ResolveFinalDeduction(_humanHost)));
+
         string urgency = deadlineReached
             ? T(
                 "Dawn has arrived. You must name the person secretly controlled by the Player.",
@@ -2512,49 +2539,159 @@ public sealed partial class Hotel2DPrototype : Node2D
         _worldAdapter.SetMovementPaused(true);
         RefreshProgress();
 
-        bool correct = _truth is not null && suspect == _truth.HiddenPlayer;
+        EndingKind ending = ClassifyEnding(suspect);
         PlayerJournal journal = _simulation.GetPlayerJournal(_humanHost);
-        string title = correct
-            ? T("THE NAME YOU SPOKE", "ชื่อที่คุณเอ่ยออกไป")
-            : T("THE WRONG NAME", "ชื่อที่ไม่ใช่");
-        string body = BuildAccusationNarrative(suspect, correct, journal);
+        (string title, string accent) = ending switch
+        {
+            EndingKind.YouWereThePlayer => (
+                T("IT WAS YOU", "คนนั้นคือคุณ"), "c9a0ff"),
+            EndingKind.CorrectAccusation => (
+                T("THE NAME YOU SPOKE", "ชื่อที่คุณเอ่ยออกไป"), "77dd77"),
+            _ => (T("THE WRONG NAME", "ชื่อที่ไม่ใช่"), "e06c75"),
+        };
 
         ShowInvestigationScreen(
             title,
-            body,
-            new Color(correct ? "77dd77" : "e06c75"),
+            BuildAccusationNarrative(suspect, ending, journal),
+            new Color(accent),
             [new InvestigationChoice(
                 T("SEE THE AFTERMATH", "ดูสิ่งที่เกิดขึ้นหลังจากนั้น"),
-                () => ShowAftermath(suspect, correct, journal))],
+                () => ShowAftermath(suspect, ending, journal))],
             allowClose: false);
     }
 
-    private string BuildAccusationNarrative(EntityId suspect, bool correct, PlayerJournal journal)
+    /// <summary>
+    /// Which of the three endings this accusation earns.
+    /// </summary>
+    /// <remarks>
+    /// Naming yourself and being right is a different ending from naming yourself
+    /// and being wrong, and both are different from failing to notice that the
+    /// hand on you was your own. The question the game asks is not "who is the
+    /// culprit" but "who is being controlled", and the host was always on the list.
+    /// </remarks>
+    private EndingKind ClassifyEnding(EntityId suspect)
     {
-        string clue = DescribeMostRelevantClue(journal);
-        return correct
-            ? T(
-                $"At 05:00, George says {DisplayName(suspect)}'s name. The lobby goes still. {DisplayName(suspect)} does not argue; their answer arrives a beat too late, as if someone else is choosing it.\n\nThe clue that stayed with George:\n{clue}\n\nThen the basement door clicks open again — from George's side of the hotel.",
-                $"เวลา 05:00 จอร์จเอ่ยชื่อ {DisplayName(suspect)} ล็อบบี้เงียบลงทันที {DisplayName(suspect)} ไม่เถียง แต่ตอบช้าราวกับมีใครอีกคนกำลังเลือกคำพูดแทน\n\nเบาะแสที่จอร์จนึกถึง:\n{clue}\n\nจากนั้นประตูชั้นใต้ดินก็ดังคลิกขึ้นอีกครั้ง จากฝั่งของจอร์จเอง")
-            : T(
-                $"At 05:00, George says {DisplayName(suspect)}'s name. For a moment, everyone accepts it. Then a new movement appears where no one should be.\n\nThe clue George overlooked:\n{clue}\n\nThe person you accused is frightened — but the Player is still moving somewhere in the hotel.",
-                $"เวลา 05:00 จอร์จเอ่ยชื่อ {DisplayName(suspect)} ชั่วขณะหนึ่งทุกคนเชื่อว่าคดีจบแล้ว แต่มีการเคลื่อนไหวใหม่เกิดขึ้นในที่ที่ไม่มีใครควรอยู่\n\nเบาะแสที่จอร์จมองข้าม:\n{clue}\n\nคนที่คุณกล่าวหากลัวจริง แต่ผู้ควบคุมยังเคลื่อนไหวอยู่ที่ใดที่หนึ่งในโรงแรม");
+        if (_truth is null)
+        {
+            return EndingKind.FalseAccusation;
+        }
+
+        return suspect != _truth.HiddenPlayer
+            ? EndingKind.FalseAccusation
+            : _truth.HostIsHiddenPlayer
+                ? EndingKind.YouWereThePlayer
+                : EndingKind.CorrectAccusation;
     }
 
-    private void ShowAftermath(EntityId suspect, bool correct, PlayerJournal journal)
+    private string BuildAccusationNarrative(
+        EntityId suspect,
+        EndingKind ending,
+        PlayerJournal journal)
     {
-        string body = correct
-            ? T(
-                $"The hotel records {DisplayName(suspect)}'s movements, but they cannot explain the final door. George realizes the truth: finding the controlled person did not mean he was outside the game.\n\nWhat the case leaves behind\n• The Player can use ordinary routines as cover.\n• George's own actions can become evidence for someone else.\n• The basement is no longer only a locked room.\n\nThis night is closed. The hotel is not.",
-                $"บันทึกของโรงแรมยืนยันการเคลื่อนไหวของ {DisplayName(suspect)} แต่ไม่อาจอธิบายประตูบานสุดท้ายได้ จอร์จจึงเข้าใจว่า การหาคนที่ถูกควบคุมพบไม่ได้แปลว่าเขาอยู่นอกเกม\n\nสิ่งที่คดีนี้ทิ้งไว้\n• ผู้ควบคุมใช้กิจวัตรธรรมดาเป็นฉากบังหน้าได้\n• การกระทำของจอร์จเองอาจกลายเป็นหลักฐานให้คนอื่น\n• ชั้นใต้ดินไม่ใช่เพียงห้องที่ถูกล็อกอีกต่อไป\n\nคดีคืนนี้ปิดลงแล้ว แต่โรงแรมยังไม่จบ")
-            : T(
-                $"Before dawn, {DisplayName(suspect)} is allowed to leave. The staff will remember George's certainty — and the damage it caused.\n\nWhat the case leaves behind\n• A convincing story is not the same as a direct observation.\n• A clue needs a source before it becomes an accusation.\n• The Player benefits whenever people stop comparing notes.\n\nThe next night begins with less trust than the last.",
-                $"ก่อนรุ่งเช้า {DisplayName(suspect)} ได้รับอนุญาตให้ออกไป พนักงานทุกคนจะจดจำความมั่นใจของจอร์จ และผลเสียที่ตามมา\n\nสิ่งที่คดีนี้ทิ้งไว้\n• เรื่องที่ฟังน่าเชื่อไม่เท่ากับสิ่งที่เห็นด้วยตา\n• เบาะแสต้องมีที่มาก่อนจะกลายเป็นคำกล่าวหา\n• ผู้ควบคุมได้ประโยชน์ทุกครั้งที่คนหยุดเปรียบเทียบข้อมูล\n\nกะถัดไปเริ่มขึ้นด้วยความไว้วางใจที่น้อยกว่าเดิม");
+        string clue = DescribeMostRelevantClue(journal);
+        string who = DisplayName(suspect);
+        return ending switch
+        {
+            EndingKind.YouWereThePlayer => T(
+                "At 05:00, George says his own name. Nobody laughs.\n\n" +
+                    "He has been reading the night for hours and every line of it kept " +
+                    "arriving back at the same place. The clue he could not put down:\n" +
+                    clue + "\n\n" +
+                    "The hand that opened the basement door was on the end of his own arm. " +
+                    "He simply had not been the one deciding when it moved.",
+                "เวลา 05:00 จอร์จเอ่ยชื่อของตัวเอง ไม่มีใครหัวเราะ\n\n" +
+                    "เขาอ่านคืนนี้มาหลายชั่วโมง และทุกเส้นทางย้อนกลับมาที่เดิม " +
+                    "เบาะแสที่เขาวางไม่ลง:\n" + clue + "\n\n" +
+                    "มือที่เปิดประตูชั้นใต้ดินอยู่ปลายแขนของเขาเอง " +
+                    "เพียงแต่เขาไม่ใช่คนที่ตัดสินใจว่ามันจะขยับเมื่อไร"),
+
+            EndingKind.CorrectAccusation => T(
+                $"At 05:00, George says {who}'s name. The lobby goes still. {who} does not " +
+                    "argue; their answer arrives a beat too late, as if someone else is " +
+                    "choosing it.\n\nThe clue that stayed with George:\n" + clue + "\n\n" +
+                    "Then the basement door clicks open again — from George's side of the hotel.",
+                $"เวลา 05:00 จอร์จเอ่ยชื่อ {who} ล็อบบี้เงียบลงทันที {who} ไม่เถียง " +
+                    "แต่ตอบช้าราวกับมีใครอีกคนกำลังเลือกคำพูดแทน\n\n" +
+                    "เบาะแสที่จอร์จนึกถึง:\n" + clue + "\n\n" +
+                    "จากนั้นประตูชั้นใต้ดินก็ดังคลิกขึ้นอีกครั้ง จากฝั่งของจอร์จเอง"),
+
+            _ => T(
+                $"At 05:00, George says {who}'s name. For a moment, everyone accepts it. " +
+                    "Then a new movement appears where no one should be.\n\n" +
+                    "The clue George overlooked:\n" + clue + "\n\n" +
+                    "The person you accused is frightened — but the Player is still moving " +
+                    "somewhere in the hotel.",
+                $"เวลา 05:00 จอร์จเอ่ยชื่อ {who} ชั่วขณะหนึ่งทุกคนเชื่อว่าคดีจบแล้ว " +
+                    "แต่มีการเคลื่อนไหวใหม่เกิดขึ้นในที่ที่ไม่มีใครควรอยู่\n\n" +
+                    "เบาะแสที่จอร์จมองข้าม:\n" + clue + "\n\n" +
+                    "คนที่คุณกล่าวหากลัวจริง แต่ผู้ควบคุมยังเคลื่อนไหวอยู่ที่ใดที่หนึ่งในโรงแรม"),
+        };
+    }
+
+    private void ShowAftermath(
+        EntityId suspect,
+        EndingKind ending,
+        PlayerJournal journal)
+    {
+        _ = journal;
+        string who = DisplayName(suspect);
+        (string body, string accent) = ending switch
+        {
+            EndingKind.YouWereThePlayer => (T(
+                "The shift ends. Nobody stops him, because there is nothing in the ledger " +
+                    "to stop him for.\n\nWhat the case leaves behind\n" +
+                    "• Every question he asked tonight was also a move somebody made.\n" +
+                    "• The hotel was building its case against him the whole time, and it " +
+                    "was right.\n" +
+                    "• Knowing does not hand the controls back.\n\n" +
+                    "George goes home at dawn. Something else decides when he comes in tomorrow.",
+                "กะจบลง ไม่มีใครห้ามเขา เพราะในบันทึกไม่มีอะไรให้ห้าม\n\n" +
+                    "สิ่งที่คดีนี้ทิ้งไว้\n" +
+                    "• ทุกคำถามที่เขาถามคืนนี้ ก็เป็นการกระทำของใครบางคนเช่นกัน\n" +
+                    "• โรงแรมสร้างคดีต่อเขามาตลอดทั้งคืน และมันคิดถูก\n" +
+                    "• การรู้ความจริงไม่ได้แปลว่าได้การควบคุมคืนมา\n\n" +
+                    "จอร์จกลับบ้านตอนรุ่งเช้า แต่มีอย่างอื่นเป็นคนตัดสินว่าพรุ่งนี้เขาจะมากี่โมง"),
+                "c9a0ff"),
+
+            EndingKind.CorrectAccusation => (T(
+                $"The hotel records {who}'s movements, but they cannot explain the final " +
+                    "door. George realizes the truth: finding the controlled person did not " +
+                    "mean he was outside the game.\n\nWhat the case leaves behind\n" +
+                    "• The Player can use ordinary routines as cover.\n" +
+                    "• George's own actions can become evidence for someone else.\n" +
+                    "• The basement is no longer only a locked room.\n\n" +
+                    "This night is closed. The hotel is not.",
+                $"บันทึกของโรงแรมยืนยันการเคลื่อนไหวของ {who} แต่ไม่อาจอธิบายประตูบานสุดท้ายได้ " +
+                    "จอร์จจึงเข้าใจว่า การหาคนที่ถูกควบคุมพบไม่ได้แปลว่าเขาอยู่นอกเกม\n\n" +
+                    "สิ่งที่คดีนี้ทิ้งไว้\n" +
+                    "• ผู้ควบคุมใช้กิจวัตรธรรมดาเป็นฉากบังหน้าได้\n" +
+                    "• การกระทำของจอร์จเองอาจกลายเป็นหลักฐานให้คนอื่น\n" +
+                    "• ชั้นใต้ดินไม่ใช่เพียงห้องที่ถูกล็อกอีกต่อไป\n\n" +
+                    "คดีคืนนี้ปิดลงแล้ว แต่โรงแรมยังไม่จบ"),
+                "77dd77"),
+
+            _ => (T(
+                $"Before dawn, {who} is allowed to leave. The staff will remember George's " +
+                    "certainty — and the damage it caused.\n\n" +
+                    "What the case leaves behind\n" +
+                    "• A convincing story is not the same as a direct observation.\n" +
+                    "• A clue needs a source before it becomes an accusation.\n" +
+                    "• The Player benefits whenever people stop comparing notes.\n\n" +
+                    "The next night begins with less trust than the last.",
+                $"ก่อนรุ่งเช้า {who} ได้รับอนุญาตให้ออกไป พนักงานทุกคนจะจดจำความมั่นใจของจอร์จ " +
+                    "และผลเสียที่ตามมา\n\n" +
+                    "สิ่งที่คดีนี้ทิ้งไว้\n" +
+                    "• เรื่องที่ฟังน่าเชื่อไม่เท่ากับสิ่งที่เห็นด้วยตา\n" +
+                    "• เบาะแสต้องมีที่มาก่อนจะกลายเป็นคำกล่าวหา\n" +
+                    "• ผู้ควบคุมได้ประโยชน์ทุกครั้งที่คนหยุดเปรียบเทียบข้อมูล\n\n" +
+                    "กะถัดไปเริ่มขึ้นด้วยความไว้วางใจที่น้อยกว่าเดิม"),
+                "e06c75"),
+        };
 
         ShowInvestigationScreen(
             T("AFTERMATH", "หลังจากคืนนั้น"),
             body,
-            new Color(correct ? "77dd77" : "e06c75"),
+            new Color(accent),
             [
                 new InvestigationChoice(T("REPLAY THE NIGHT", "เล่นกะคืนนี้ใหม่"), RestartShift),
                 new InvestigationChoice(T("BACK TO TITLE", "กลับหน้าแรก"), ReturnToTitle),

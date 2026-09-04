@@ -192,9 +192,17 @@ public sealed class BasementScenarioSession
             _movement,
             new UtilityNpcBrain([new ScheduleGoalSource(), playerDirector]),
             [playerDirector]);
-        _playerRoutine.Register(CreateRoutineProfile(
-            _hiddenPlayer,
-            BasementScenario.Lobby));
+        // When the truth says the host is the one being steered, the human already
+        // is the Player AI. Registering it as well would put two drivers on one
+        // character - the same double-drive that made George unplayable before
+        // Milestone 4 - and would rob the twist of its meaning: the Player-like
+        // behaviour the cast reacts to has to be the human's own.
+        if (options.Truth?.HostIsHiddenPlayer != true)
+        {
+            _playerRoutine.Register(CreateRoutineProfile(
+                _hiddenPlayer,
+                BasementScenario.Lobby));
+        }
 
         // Without a truth this stays the two hand-written profiles the scripted
         // scenario was pinned against; with one, everybody can react to what they
