@@ -16,6 +16,7 @@ using Game.Sim.PlayerAi;
 using Game.Sim.Roles;
 using Game.Sim.Routines;
 using Game.Sim.Schedules;
+using Game.Sim.Secrets;
 using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
 using Game.Sim.Time;
@@ -49,6 +50,7 @@ public sealed class BasementScenarioSession
     private readonly List<NpcRoutineDecision> _decisions = [];
     private readonly Dictionary<EntityId, SimTime> _firstSuspicion = [];
     private readonly RoleDutySystem? _duties;
+    private readonly SecretPlanRepository? _secretPlans;
     private readonly EntityId _hiddenPlayer;
     private readonly PlayerAiArchetype _hiddenPlayerArchetype;
     private WorldEvent? _restrictedEntry;
@@ -204,12 +206,31 @@ public sealed class BasementScenarioSession
             _suspicion,
             eventFactory,
             _buffer);
+        // Secrets are what make an odd-looking character ambiguous. Without them
+        // the only person in the hotel behaving strangely is the Player AI, and
+        // "strange means Player" becomes a rule that simply works.
+        var goalSources = new List<INpcGoalSource> { new ScheduleGoalSource(), behaviorGoals };
+        var observers = new List<INpcRoutineDecisionObserver> { behaviorActions };
+        if (_options.Truth is { Secrets.Count: > 0 } truth)
+        {
+            _secretPlans = HotelSecretStaging.Stage(
+                truth.Secrets,
+                entity => HotelRoles.FirstOrDefault(item => item.Entity == entity).Role);
+            goalSources.Add(new SecretGoalSource(_secretPlans));
+            observers.Add(new SecretBehaviorSystem(
+                _clock,
+                _world,
+                eventFactory,
+                _buffer,
+                _secretPlans));
+        }
+
         _behaviorRoutine = new NpcRoutineSystem(
             _clock,
             _world,
             _movement,
-            new UtilityNpcBrain([new ScheduleGoalSource(), behaviorGoals]),
-            [behaviorActions]);
+            new UtilityNpcBrain(goalSources),
+            observers);
         // Whoever the Player AI is steering is deliberately left out: two routine
         // systems issuing movement for the same actor would cancel each other's
         // requests every tick.
@@ -351,6 +372,13 @@ public sealed class BasementScenarioSession
     /// on the host. Nothing hidden is consulted; every entry traces back to an
     /// observation some NPC actually made.
     /// </summary>
+    /// <summary>
+    /// The private business the cast is conducting tonight. Exposed for tests and
+    /// tooling only - nothing the player can see may be derived from it, since the
+    /// whole point is that a secret and a Player look alike from the outside.
+    /// </summary>
+    public IReadOnlyList<SecretPlan> SecretPlans => _secretPlans?.Plans ?? [];
+
     /// <summary>Everything the cast has told the player about their whereabouts.</summary>
     public IReadOnlyList<AlibiClaim> Claims => _dialogue.Claims.Claims;
 

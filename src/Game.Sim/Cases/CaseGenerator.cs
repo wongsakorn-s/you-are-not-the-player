@@ -102,7 +102,17 @@ public static class CaseGenerator
                 continue;
             }
 
-            EntityId[] accomplices = [.. options.Roster.Where(entity => entity != owner)];
+            // The accomplice comes from the same pool as the owner. Picking the
+            // host or the hidden player would stage a meeting that can never
+            // happen: one is driven by a human and the other by the Player AI, so
+            // neither takes the secret goal that brings them to the rendezvous.
+            EntityId[] accomplices = [.. candidates.Where(entity => entity != owner)];
+            if (accomplices.Length == 0)
+            {
+                assignments.Add(new SecretAssignment(owner, SecretBehaviorKind.NightOwl));
+                continue;
+            }
+
             assignments.Add(new SecretAssignment(owner, behavior, Pick(random, accomplices)));
         }
 

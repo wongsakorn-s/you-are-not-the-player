@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 251/251 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 257/257 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -30,6 +30,7 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **Floor-plan & Ending Pass:** เปลี่ยนแผนที่จาก node graph เป็นผังพื้นที่ภายใน/ภายนอกที่อ่านเป็นห้อง ทางเดิน ประตู และจุดใช้งานได้ พร้อมฉากจบสองช่วง (`คำกล่าวหา → ผลที่ตามมา`) ซึ่งอ้างเบาะแสจริงที่เด่นที่สุดของรอบนั้น.
 - **Thai Localization Audit:** UI, tooltip, objective, บทสนทนา, แฟ้มคดี และฉากจบรองรับไทย/อังกฤษ; ใช้คำไทยว่า “ผู้ควบคุม” ในเนื้อหาแทนคำระบบ `Player` และเพิ่ม smoke/regression check ป้องกันหัวข้อ journal หรือชื่อ George ภาษาอังกฤษหลุดในโหมดไทย.
 - **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
+- **False Positive เกิดได้จริงแล้ว (§0.5):** ต่อ `SessionTruth.Secrets` เข้า `SecretPlanRepository` ผ่าน `HotelSecretStaging` — seed กำหนดว่าใครมีความลับแบบไหน ส่วนฉากโรงแรมกำหนดว่ามันเกิดที่ไหนเมื่อไร (แยกกันเพื่อให้ `SessionTruth` ยังใช้กับฉากอื่นได้); `SecretGoalSource` เข้า brain และ `SecretBehaviorSystem` เป็น observer. ผลคือ `Theft` กับ `NightActivity` **ยิงได้เป็นครั้งแรก** แปลว่าตอนนี้ NPC ธรรมดาที่มีความลับดูผิดปกติได้เท่า Player จริง — กฎ “แปลก = Player” ใช้ไม่ได้อีกต่อไป.
 - **Observable Normality (§0.10.1):** เดิม NPC ทุกคนมีตาราง `Idle` 24 ชั่วโมง จึงไม่มี “ปกติ” ให้เบี่ยงเบน; เพิ่ม `HotelNightRoutines` กำหนดตารางกะกลางคืนจริงตามบทบาท (พนักงานต้อนรับ/แม่บ้าน/รปภ./เชฟ/ผู้จัดการ/แขก) พร้อมสิทธิ์เข้าห้องตามบทบาท และ `RoleDutySystem` ที่ยิง `RoleDutyMissed` — ตัวผลิตที่ขาดหายทำให้ `RoleNeglect` ไม่เคยทำงาน. วัดผลต่อหนึ่งคืนเต็ม: decisions ที่เป็น Idle จาก 60% เหลือ 0%, `RoleDutyMissed` จาก 0 เป็น 9 และแฟ้มคดีมีเบาะแสจริง 18 ชิ้น.
 - **Sim Clock ตรงกับนาฬิกาของเกม:** เดิม `SimClock.TimeOfDay` คิดว่า 1 tick = ¼ วินาที (240 ticks = 1 นาที) ขณะที่ HUD คิดว่า 1 tick = 1 นาที ตารางจึงค้างที่ 00:00 ทั้งคืน; เพิ่ม `startOfDay` กับ `ticksPerMinute` โดย session ส่ง 23:00 กับ 1 เมื่อมี `SessionTruth`.
 - **Case File Is About Other People:** `GetJournal` เคยใส่ความทรงจำทุกชิ้นรวมถึงการกระทำของผู้เล่นเอง ทำให้แฟ้มคดีเต็มไปด้วย “จอร์จแตะหรือตรวจบางอย่าง”, เสนอสิ่งเหล่านี้เป็นหลักฐานไปยันหน้าคนอื่น และ—เพราะ self-memory มี confidence เต็ม—กลายเป็น “เบาะแสที่เด่นที่สุด” ที่ถูกอ้างในฉากจบ.
@@ -2447,7 +2448,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Automated tests ผ่าน (251/251 tests passed)
+- [x] Automated tests ผ่าน (257/257 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2507,7 +2508,7 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 5. **Milestone 5 — Accusation & Endings (ฐานแรกเสร็จแล้ว):** เลือกผู้ถูกกล่าวหาและแสดงฉาก `คำกล่าวหา → ผลที่ตามมา` สำหรับคำตอบถูก/ผิดได้แล้ว; หลังมี `SessionTruth` ให้ขยาย Correct Accusation, False Accusation และ You Were The Player ตาม case variation.
 6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 251/251 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 257/257 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 
