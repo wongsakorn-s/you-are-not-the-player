@@ -808,6 +808,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             {
                 _eventHistory.RemoveAt(_eventHistory.Count - 1);
             }
+
+            AnnounceAnomalyIfWitnessed(worldEvent);
         }
 
         RefreshEventFeed();
@@ -890,6 +892,36 @@ public sealed partial class Hotel2DPrototype : Node2D
         _atmosphereOverlay.Color = alertColor;
         RefreshStatus(T(beat.EnglishText, beat.ThaiText));
         RefreshEventFeed();
+    }
+
+    /// <summary>
+    /// An anomaly the host was standing next to is the strongest thing that can
+    /// happen in a run, and it is over in one tick. It gets an interrupt rather
+    /// than a line in a feed that scrolls.
+    /// </summary>
+    private void AnnounceAnomalyIfWitnessed(WorldEvent worldEvent)
+    {
+        if (_simulation is null ||
+            _gameEnded ||
+            worldEvent.Type != EventType.RealityAnomaly ||
+            worldEvent.Actor == _humanHost)
+        {
+            return;
+        }
+
+        // Only if George was in the room. Hearing about it later is a clue in the
+        // case file; seeing it is a moment.
+        if (worldEvent.Location != _simulation.GetLogicalLocation(_humanHost))
+        {
+            return;
+        }
+
+        string who = DisplayName(worldEvent.Actor);
+        ShowShiftAlert(new ShiftBeat(
+            _simulation.CurrentTick,
+            ShiftBeatKind.ImpossibleFootsteps,
+            $"Something about {who} just happened that cannot have happened.",
+            $"มีบางอย่างเกี่ยวกับ{who} เพิ่งเกิดขึ้นทั้งที่มันเกิดขึ้นไม่ได้"));
     }
 
     private void RefreshEventFeed()

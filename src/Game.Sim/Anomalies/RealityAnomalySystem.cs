@@ -86,6 +86,56 @@ public sealed class RealityAnomalySystem
         return anomalyEvent;
     }
 
+    /// <summary>
+    /// Somebody has no memory of a conversation that just happened. To the person
+    /// they were talking to it is the world skipping, not a lapse of attention.
+    /// </summary>
+    public WorldEvent TriggerDialogueResetAnomaly(EntityId subject, LocationId location)
+    {
+        WorldEvent resetEvent = _events.Create(
+            subject,
+            EventType.RealityAnomaly,
+            location,
+            tags: AnomalyTags,
+            payload: new RealityAnomalyPayload(
+                AnomalyKind.DialogueReset,
+                $"{subject.Value} repeated a greeting word for word, with no memory of having just said it.",
+                subject));
+
+        _eventBuffer.Publish(resetEvent);
+        RememberForWitnesses(resetEvent, subject, location, PerceptionChannel.Visual);
+        return resetEvent;
+    }
+
+    private void RememberForWitnesses(
+        WorldEvent anomalyEvent,
+        EntityId subject,
+        LocationId location,
+        PerceptionChannel channel)
+    {
+        foreach (EntityState witness in _world.Entities
+            .Where(entity => entity.Id != subject && entity.LogicalLocation == location))
+        {
+            MemoryRecord? memory = _memories.Remember(new Observation(
+                id: new ObservationId(anomalyEvent.Id.Value),
+                sourceEvent: anomalyEvent.Id,
+                observer: witness.Id,
+                perceivedActor: subject,
+                perceivedType: EventType.RealityAnomaly,
+                location: location,
+                perceivedTags: AnomalyTags,
+                time: _clock.Now,
+                confidence: 1.0f,
+                salience: 1.0f,
+                channel: channel));
+
+            if (memory is not null)
+            {
+                _ = _suspicion.ProcessMemory(witness.Id, memory);
+            }
+        }
+    }
+
     public WorldEvent TriggerFastTravelAnomaly(EntityId actor, LocationId destination)
     {
         WorldEvent blinkEvent = _events.Create(

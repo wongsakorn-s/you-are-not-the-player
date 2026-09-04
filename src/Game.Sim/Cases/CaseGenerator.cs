@@ -136,12 +136,13 @@ public static class CaseGenerator
                 : sliceStart + random.NextInt(0, (int)Math.Min(int.MaxValue, sliceEnd - sliceStart));
             AnomalyKind kind = Pick(random, AnomalyKinds);
 
-            // Anomalies read as evidence about whoever they land on, so most of
-            // them point at the hidden player and the rest are decoys.
-            EntityId[] others = [.. options.Roster.Where(entity => entity != hiddenPlayer)];
-            EntityId decoy = others.Length == 0 ? hiddenPlayer : Pick(random, others);
-            EntityId subject = random.Chance(0.6f) ? hiddenPlayer : decoy;
-            beats.Add(new AnomalyBeat(tick, kind, subject));
+            // Always the hidden player. An anomaly is the seam where something
+            // outside the world reaches into it, so staging a fake one on an
+            // innocent would not be a red herring - it would be the fiction
+            // contradicting itself. The uncertainty here comes from imperfect
+            // information instead: whether anyone was in the room, and whether what
+            // reaches the player is a sighting or a story.
+            beats.Add(new AnomalyBeat(tick, kind, hiddenPlayer));
         }
 
         return beats;
