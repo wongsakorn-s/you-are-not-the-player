@@ -10,7 +10,7 @@
 
 Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 269/269 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 277/277 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
@@ -30,6 +30,9 @@ Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหม�
 - **Floor-plan & Ending Pass:** เปลี่ยนแผนที่จาก node graph เป็นผังพื้นที่ภายใน/ภายนอกที่อ่านเป็นห้อง ทางเดิน ประตู และจุดใช้งานได้ พร้อมฉากจบสองช่วง (`คำกล่าวหา → ผลที่ตามมา`) ซึ่งอ้างเบาะแสจริงที่เด่นที่สุดของรอบนั้น.
 - **Thai Localization Audit:** UI, tooltip, objective, บทสนทนา, แฟ้มคดี และฉากจบรองรับไทย/อังกฤษ; ใช้คำไทยว่า “ผู้ควบคุม” ในเนื้อหาแทนคำระบบ `Player` และเพิ่ม smoke/regression check ป้องกันหัวข้อ journal หรือชื่อ George ภาษาอังกฤษหลุดในโหมดไทย.
 - **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
+- **Tuning Pass:** เกณฑ์ pattern ถูกเขียนไว้สมัย 1 tick = ¼ วินาที — `LootSweep` ต้องการ 10 วัตถุจากที่มีทั้งหมด 11 ชิ้น และ `RoleNeglect` มีหน้าต่าง 60 ชั่วโมง (ยาวกว่ากะที่มันอธิบาย 10 เท่า); เพิ่ม `HotelNightRoutines.PatternPolicy()` ที่ขนาดสมกับโรงแรมนี้.
+- **Needs ทำงานแล้ว (§14):** `NeedGoalSource` เข้า brain และ `HotelNeeds` ตั้งอัตราให้ความหิวมาถึงราว 02:30 และความล้าราว 04:00 ภายในกะเดียว — เพิ่ม**เหตุผลบริสุทธิ์อีกข้อที่คนจะออกจากที่ประจำ** ตอนตีสี่.
+- **แก้ anomaly นับคะแนนสองเด้ง:** `AnomalyTags` ชุดเดียวถือทั้ง `Pattern` และ `Suspicious` ทำให้กฎ anomaly ทั้งสองข้อ (ซึ่งเป็นทางเลือกกัน) ยิงพร้อมกัน; แยก tag ตามชนิด anomaly และเพิ่ม `MaxBeliefWeight` จำกัดว่าความสงสัยดึง utility ได้แค่ไหน — เดิมคะแนนไม่มีเพดาน ทำให้ทั้งโรงแรมทิ้งงานไปไล่ตามคนเดียวทั้งคืน. fingerprint ของ `reality-breach` เปลี่ยนจากการแยก tag นี้โดยตั้งใจ.
 - **Reality Anomalies เกิดขึ้นจริง (§0.6):** ต่อ `truth.AnomalySchedule` เข้าลูป simulation — เดิม `CaseGenerator` สร้างตารางไว้แล้วไม่มีใครอ่าน `RealityAnomalySystem` จึงไม่เคยยิง event ในเกมจริงเลย; เพิ่ม `TriggerDialogueResetAnomaly` ที่ขาดหายตาม enum. anomaly เกิดกับ Hidden Player เท่านั้น — ความไม่แน่นอนมาจากว่ามีใครอยู่ตรงนั้นไหมและข่าวที่ได้ยินต่อน่าเชื่อแค่ไหน ไม่ใช่จาก anomaly ปลอม; ถ้า host อยู่ในห้องขณะมันเกิด จะมี alert ขัดขึ้นมา.
 - **ทุกคนตอบสนองต่อความสงสัยได้ (§0.8):** เดิมมีเพียง Anna กับ Bob ที่มี `SuspicionBehaviorProfile` และ Bob ไม่มีคนให้เล่าเลย; เพิ่ม `HotelSocialGraph` กำหนดว่าแต่ละบทบาทไว้ใจใครและหลบไปที่ไหน โดย test บังคับว่ากราฟต้อง strongly connected — จับได้ว่าร่างแรกของผมทำให้ฝั่งผู้บริหารเป็นวงปิด ข่าวเข้าได้แต่ออกไม่ได้. คืนหนึ่งที่ seed 481516 เกิดสายความสงสัยอิสระ 3 สาย จากกฎคนละแบบ: `witnessed_theft`, `witnessed_night_activity`, `detected_role_neglect`.
 - **False Positive เกิดได้จริงแล้ว (§0.5):** ต่อ `SessionTruth.Secrets` เข้า `SecretPlanRepository` ผ่าน `HotelSecretStaging` — seed กำหนดว่าใครมีความลับแบบไหน ส่วนฉากโรงแรมกำหนดว่ามันเกิดที่ไหนเมื่อไร (แยกกันเพื่อให้ `SessionTruth` ยังใช้กับฉากอื่นได้); `SecretGoalSource` เข้า brain และ `SecretBehaviorSystem` เป็น observer. ผลคือ `Theft` กับ `NightActivity` **ยิงได้เป็นครั้งแรก** แปลว่าตอนนี้ NPC ธรรมดาที่มีความลับดูผิดปกติได้เท่า Player จริง — กฎ “แปลก = Player” ใช้ไม่ได้อีกต่อไป.
@@ -2450,7 +2453,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Automated tests ผ่าน (269/269 tests passed)
+- [x] Automated tests ผ่าน (277/277 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2510,7 +2513,7 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 5. **Milestone 5 — Accusation & Endings (ฐานแรกเสร็จแล้ว):** เลือกผู้ถูกกล่าวหาและแสดงฉาก `คำกล่าวหา → ผลที่ตามมา` สำหรับคำตอบถูก/ผิดได้แล้ว; หลังมี `SessionTruth` ให้ขยาย Correct Accusation, False Accusation และ You Were The Player ตาม case variation.
 6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 269/269 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 277/277 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 

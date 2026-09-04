@@ -139,6 +139,42 @@ public static class HotelNightRoutines
         _ => Build((0, 0, 0, 0, RoutineActivity.Idle, Lobby)),
     };
 
+    /// <summary>
+    /// Pattern thresholds sized for this hotel and this clock.
+    /// </summary>
+    /// <remarks>
+    /// The defaults were written for a quarter-second tick and a bigger building.
+    /// One tick is now one minute of the night, and the hotel holds eleven
+    /// interactive objects across eight rooms - so "ten distinct containers"
+    /// meant searching all but one of them, and a role-neglect window of sixty
+    /// hours was twelve times longer than the shift it was meant to describe.
+    /// </remarks>
+    public static Patterns.BehaviorPatternPolicy PatternPolicy() => new(
+        // Five different things in an hour already reads as sweeping the place,
+        // and leaves room to be caught before you have touched everything.
+        lootSweepDistinctInteractions: 5,
+        lootSweepWindowSeconds: 60,
+        repeatInteractionCount: 4,
+        repeatInteractionWindowSeconds: 45,
+        // Three separate absences inside three hours is a pattern; across the
+        // whole night it is just a long shift.
+        roleNeglectCount: 3,
+        roleNeglectWindowSeconds: 180,
+        boundaryTestingDistinctProbes: 3,
+        boundaryTestingWindowSeconds: 45);
+
+    /// <summary>
+    /// How strongly a suspicion is allowed to pull somebody off their night.
+    /// </summary>
+    /// <remarks>
+    /// Set above a Work block (38) and a secret (46) so a real suspicion does win,
+    /// and low enough that it wins by a margin rather than erasing everything
+    /// else - a hotel where the entire staff downs tools to tail one person has
+    /// stopped being a place the player can read.
+    /// </remarks>
+    public static Behaviors.SuspicionBehaviorPolicy BehaviorPolicy() => new(
+        maxBeliefWeight: 45.0f);
+
     private static DailySchedule Build(
         params (int StartHour, int StartMinute, int EndHour, int EndMinute,
             RoutineActivity Activity, LocationId Location)[] blocks) =>

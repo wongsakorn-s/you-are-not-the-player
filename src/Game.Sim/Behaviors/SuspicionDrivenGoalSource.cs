@@ -185,7 +185,7 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
         }
     }
 
-    private static GoalCandidate CreateGoal(
+    private GoalCandidate CreateGoal(
         GoalType type,
         LocationId destination,
         float baseUtility,
@@ -196,7 +196,9 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
             type,
             destination,
             baseUtility,
-            [new UtilityReason("belief:suspicion", beliefWeight)],
+            [new UtilityReason(
+                "belief:suspicion",
+                MathF.Min(beliefWeight, _policy.MaxBeliefWeight))],
             ignoresRolePermissions: false,
             CreateIntentId(type, subject, contact),
             target: subject,

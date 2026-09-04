@@ -97,7 +97,9 @@ public sealed class BasementScenarioSession
         var eventFactory = new WorldEventFactory(_clock, new SequentialEventIdGenerator(Math.Max(1, firstEventId)));
         var patterns = new BehaviorPatternSystem(
             _clock,
-            new RuleBasedBehaviorPatternDetector(_clock.TicksPerSecond),
+            new RuleBasedBehaviorPatternDetector(
+                _clock.TicksPerSecond,
+                options.Truth is null ? null : HotelNightRoutines.PatternPolicy()),
             eventFactory,
             _buffer);
         _interactions = new InteractionActionHandler(_world, eventFactory, _buffer, patterns);
@@ -221,7 +223,8 @@ public sealed class BasementScenarioSession
             _suspicion,
             _memories,
             _clock,
-            behaviorProfiles);
+            behaviorProfiles,
+            options.Truth is null ? null : HotelNightRoutines.BehaviorPolicy());
         var behaviorActions = new SuspicionBehaviorActionSystem(
             _clock,
             _world,
@@ -232,7 +235,16 @@ public sealed class BasementScenarioSession
         // Secrets are what make an odd-looking character ambiguous. Without them
         // the only person in the hotel behaving strangely is the Player AI, and
         // "strange means Player" becomes a rule that simply works.
-        var goalSources = new List<INpcGoalSource> { new ScheduleGoalSource(), behaviorGoals };
+        // NeedGoalSource joins the ordinary cast only. Whatever is steering the
+        // hidden player is not the sort of thing that gets hungry, and giving it
+        // errands would blunt the Player-like behaviour that is meant to give it
+        // away.
+        var goalSources = new List<INpcGoalSource>
+        {
+            new ScheduleGoalSource(),
+            behaviorGoals,
+            new NeedGoalSource(),
+        };
         var observers = new List<INpcRoutineDecisionObserver> { behaviorActions };
         if (_options.Truth is { Secrets.Count: > 0 } truth)
         {
@@ -1125,17 +1137,13 @@ public sealed class BasementScenarioSession
                 .FirstOrDefault(item => item.Entity == entity).Role;
             if (!string.IsNullOrEmpty(assigned.Value))
             {
-                DailySchedule roleSchedule = HotelNightRoutines.For(assigned);
-                LocationId home = roleSchedule.Entries[0].Location;
                 return new NpcRoutineProfile(
                     entity,
                     HotelNightRoutines.Permissions(assigned),
-                    roleSchedule,
+                    HotelNightRoutines.For(assigned),
                     new NeedState(),
-                    // Needs stay switched off here: NeedGoalSource is not in the
-                    // brain yet, so growing them would only add unread state.
-                    new NeedProfile(new NeedRates(0.0, 0.0, 0.0), 0.0, 0.0, 0.0),
-                    new NeedDestinations(home, home, home));
+                    HotelNeeds.Profile(),
+                    HotelNeeds.Destinations(assigned));
             }
         }
 
