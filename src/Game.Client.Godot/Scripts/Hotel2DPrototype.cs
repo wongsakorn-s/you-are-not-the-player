@@ -227,6 +227,46 @@ public sealed partial class Hotel2DPrototype : Node2D
         RunCapture();
     }
 
+    private void OpenCaptureScreen()
+    {
+        string? screen = OS.GetCmdlineUserArgs()
+            .SkipWhile(argument => !string.Equals(
+                argument,
+                "--capture-screen",
+                StringComparison.OrdinalIgnoreCase))
+            .Skip(1)
+            .FirstOrDefault();
+        switch (screen?.ToLowerInvariant())
+        {
+            case "journal":
+                OpenJournal();
+                break;
+            case "claims":
+                OpenClaimsPage(JournalView.All, 0);
+                break;
+            case "exposure":
+                OpenExposurePage(JournalView.All, 0);
+                break;
+            case "inspect":
+                OpenInspectionChoices();
+                break;
+            case "deduce":
+                OpenFinalDeduction(deadlineReached: true);
+                break;
+            case "talk":
+                EntityId partner = _simulation?.PlayerController.GetPresentActors()
+                    .FirstOrDefault(actor => actor != _humanHost) ?? default;
+                if (!partner.IsEmpty)
+                {
+                    OpenConversation(partner);
+                }
+
+                break;
+            default:
+                break;
+        }
+    }
+
     // Development aid: renders a few frames, saves the viewport and quits, so the
     // layout can be looked at instead of reasoned about from coordinates.
     private void RunCapture()
@@ -243,7 +283,13 @@ public sealed partial class Hotel2DPrototype : Node2D
             return;
         }
 
-        if (_captureFrames < 12)
+        if (_captureFrames == 6)
+        {
+            OpenCaptureScreen();
+            return;
+        }
+
+        if (_captureFrames < 48)
         {
             return;
         }
@@ -1604,14 +1650,26 @@ public sealed partial class Hotel2DPrototype : Node2D
             RefreshProgress();
         }
 
-        string body = result.DiscoveredClue is null
-            ? $"{T("WHAT GEORGE FOUND", "สิ่งที่จอร์จพบ")}\n{LocalizeText(result.Message)}"
-            : $"{T("WHAT GEORGE FOUND", "สิ่งที่จอร์จพบ")}\n{LocalizeText(result.Message)}\n\n" +
-                $"{T("CLUE ADDED TO THE JOURNAL", "เบาะแสที่บันทึกไว้")}\n{LocalizeText(result.DiscoveredClue)}";
+        // The action message already ends with the clue sentence, so printing the
+        // clue again underneath showed the player the same line twice.
+        string message = LocalizeText(result.Message);
+        string? clue = result.DiscoveredClue is null ? null : LocalizeText(result.DiscoveredClue);
+        if (clue is not null && message.Contains(clue, StringComparison.Ordinal))
+        {
+            message = message.Replace(clue, string.Empty, StringComparison.Ordinal).TrimEnd();
+        }
+
+        string body = clue is null
+            ? $"{T("WHAT GEORGE FOUND", "สิ่งที่จอร์จพบ")}\n{message}"
+            : $"{T("WHAT GEORGE FOUND", "สิ่งที่จอร์จพบ")}\n{message}\n\n" +
+                $"{T("CLUE ADDED TO THE JOURNAL", "เบาะแสที่บันทึกไว้")}\n{clue}";
         ShowInvestigationScreen(
             T("INVESTIGATION", "สืบสวน"),
             body,
-            result.Succeeded ? new Color("77dd77") : new Color("e06c75"));
+            result.Succeeded ? new Color("77dd77") : new Color("e06c75"),
+            [new InvestigationChoice(
+                T("Look at something else", "ดูอย่างอื่นต่อ"),
+                OpenInspectionChoices)]);
         RefreshStatus(result.Succeeded
             ? $"{T("Inspected", "ตรวจสอบแล้ว")} {DisplayObject(obj)}."
             : LocalizeText(result.Message));
@@ -1754,8 +1812,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             new Color(contradictions.Count > 0 ? "f1d18a" : "77bdfb"),
             [new InvestigationChoice(
                 T("BACK TO CLUES", "กลับไปที่เบาะแส"),
-                () => OpenJournalPage(returnView, returnPage))],
-            showPortrait: false);
+                () => OpenJournalPage(returnView, returnPage))]);
     }
 
     private void OpenExposurePage(JournalView returnView, int returnPage)
@@ -1774,8 +1831,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             new Color(ExposureColors[exposure.Level]),
             [new InvestigationChoice(
                 T("BACK TO CLUES", "กลับไปที่เบาะแส"),
-                () => OpenJournalPage(returnView, returnPage))],
-            showPortrait: false);
+                () => OpenJournalPage(returnView, returnPage))]);
     }
 
     private static TimelineFilter? BuildJournalFilter(JournalView view, PlayerJournal journal) =>
@@ -1891,15 +1947,14 @@ public sealed partial class Hotel2DPrototype : Node2D
         string body,
         Color accent,
         IReadOnlyList<InvestigationChoice>? choices = null,
-        bool allowClose = true,
-        bool showPortrait = true)
+        bool allowClose = true)
     {
         if (_simulation is null || _investigationOverlay is null)
         {
             return;
         }
 
-        _investigationOverlay.ShowScreen(title, body, accent, choices, allowClose, showPortrait);
+        _investigationOverlay.ShowScreen(title, body, accent, choices, allowClose);
     }
 
     private void OnInvestigationOverlayClosed()
@@ -2057,8 +2112,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                     T("Run", "วิ่ง"),
                     () => ResolveClimaxChoice(PlayerClimaxChoice.Flee)),
             ],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private void ResolveClimaxChoice(PlayerClimaxChoice choice)
@@ -2088,8 +2142,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                     T("BACK TO TITLE", "กลับหน้าแรก"),
                     ReturnToTitle),
             ],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private static readonly Dictionary<ExposureLevel, string> ExposureColors = new()
@@ -2190,8 +2243,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                 new InvestigationChoice(T("SETTINGS", "ตั้งค่า"), ShowSettings),
                 new InvestigationChoice(T("EXIT GAME", "ออกจากเกม"), ExitGame),
             ],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private void ShowSettings()
@@ -2214,8 +2266,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                     ToggleTextSize),
                 new InvestigationChoice(T("BACK", "กลับ"), _gameStarted ? ShowPauseMenu : ShowMainMenu),
             ],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private void SetMenuLanguage(bool useThai)
@@ -2256,8 +2307,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                 new InvestigationChoice(T("SETTINGS", "ตั้งค่า"), ShowSettings),
                 new InvestigationChoice(T("EXIT GAME", "ออกจากเกม"), ExitGame),
             ],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private void ResumeInvestigation()
@@ -2289,8 +2339,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             body,
             new Color("f1d18a"),
             [new InvestigationChoice(T("BEGIN THE NIGHT SHIFT", "เริ่มกะกลางคืน"), BeginInvestigation)],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private void ShowClueGuide()
@@ -2316,8 +2365,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             body,
             new Color("77bdfb"),
             [new InvestigationChoice(T("START THE NIGHT SHIFT", "เริ่มกะกลางคืน"), BeginInvestigation)],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private void BeginInvestigation()
@@ -2416,8 +2464,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                 "โรงแรมจะจดจำหากคุณกล่าวหาคนผิด"),
             new Color(deadlineReached ? "e06c75" : "f1d18a"),
             choices,
-            allowClose: !deadlineReached,
-            showPortrait: false);
+            allowClose: !deadlineReached);
     }
 
     private void ResolveFinalDeduction(EntityId suspect)
@@ -2447,8 +2494,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             [new InvestigationChoice(
                 T("SEE THE AFTERMATH", "ดูสิ่งที่เกิดขึ้นหลังจากนั้น"),
                 () => ShowAftermath(suspect, correct, journal))],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private string BuildAccusationNarrative(EntityId suspect, bool correct, PlayerJournal journal)
@@ -2481,8 +2527,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                 new InvestigationChoice(T("REPLAY THE NIGHT", "เล่นกะคืนนี้ใหม่"), RestartShift),
                 new InvestigationChoice(T("BACK TO TITLE", "กลับหน้าแรก"), ReturnToTitle),
             ],
-            allowClose: false,
-            showPortrait: false);
+            allowClose: false);
     }
 
     private string DescribeMostRelevantClue(PlayerJournal journal)

@@ -170,8 +170,7 @@ public sealed partial class InvestigationOverlay : Control
         string body,
         Color accent,
         IReadOnlyList<InvestigationChoice>? choices = null,
-        bool allowClose = true,
-        bool showPortrait = true)
+        bool allowClose = true)
     {
         if (_title is null || _body is null || _choices is null || _panelStyle is null)
         {
@@ -183,7 +182,7 @@ public sealed partial class InvestigationOverlay : Control
         _panelStyle.BorderColor = accent.Darkened(0.15f);
         _portrait?.SetAccent(accent);
         _body.Text = body;
-        ApplyLayout(showPortrait);
+        ApplyLayout();
         if (_close is not null)
         {
             _close.Visible = allowClose;
@@ -191,12 +190,18 @@ public sealed partial class InvestigationOverlay : Control
 
         ClearChoices();
 
+        // Two columns leave a stranded button whenever the count is odd, and a
+        // single wide button reads better than half a row anyway.
+        int choiceCount = choices?.Count ?? 0;
+        _choices.Columns = choiceCount <= 3 ? 1 : 2;
+        float choiceWidth = _choices.Columns == 1 ? ContentWidth : 395.0f;
+
         foreach (InvestigationChoice choice in choices ?? [])
         {
             var button = new Button
             {
                 Text = choice.Label,
-                CustomMinimumSize = new Vector2(showPortrait ? 395.0f : 520.0f, 54.0f),
+                CustomMinimumSize = new Vector2(choiceWidth, 50.0f),
                 MouseDefaultCursorShape = CursorShape.PointingHand,
                 AutowrapMode = TextServer.AutowrapMode.WordSmart,
             };
@@ -237,20 +242,52 @@ public sealed partial class InvestigationOverlay : Control
         }
     }
 
-    private void ApplyLayout(bool showPortrait)
+    private const float ContentLeft = 285.0f;
+    private const float ContentWidth = 810.0f;
+    private const float BodyTop = 82.0f;
+
+    // The portrait used to be hidden on some screens, which slid the text column
+    // from x=285 to x=40 and back as the player moved between pages of the same
+    // case file, and left a hole where it had been. One geometry for every screen
+    // costs some width and buys a layout that does not jump.
+    private void ApplyLayout()
     {
         if (_portrait is null || _title is null || _body is null || _choices is null)
         {
             return;
         }
 
-        _portrait.Visible = showPortrait;
-        _title.Position = new Vector2(showPortrait ? 285.0f : 40.0f, 24.0f);
-        _title.Size = new Vector2(showPortrait ? 500.0f : 740.0f, 44.0f);
-        _body.Position = new Vector2(showPortrait ? 285.0f : 40.0f, 82.0f);
-        _body.Size = new Vector2(showPortrait ? 810.0f : 1060.0f, 210.0f);
-        _choices.Position = new Vector2(showPortrait ? 285.0f : 40.0f, 310.0f);
-        _choices.Size = new Vector2(showPortrait ? 810.0f : 1060.0f, 220.0f);
+        _portrait.Visible = true;
+        _title.Position = new Vector2(ContentLeft, 24.0f);
+        _title.Size = new Vector2(500.0f, 44.0f);
+        _body.Position = new Vector2(ContentLeft, BodyTop);
+        _body.Size = new Vector2(ContentWidth, 210.0f);
+        _choices.Position = new Vector2(ContentLeft, 310.0f);
+        _choices.Size = new Vector2(ContentWidth, 220.0f);
+    }
+
+    // Body text ranged from one line to a dozen, but the choices were pinned at a
+    // fixed y, so most screens opened with a paragraph, a few hundred pixels of
+    // nothing, and then the buttons. Measuring has to happen after a layout pass,
+    // which is why it runs here rather than in ShowScreen.
+    public override void _Process(double delta)
+    {
+        if (!Visible || _body is null || _choices is null)
+        {
+            return;
+        }
+
+        float measured = Mathf.Clamp(_body.GetContentHeight() + 6.0f, 28.0f, 330.0f);
+        if (Mathf.Abs(_body.Size.Y - measured) > 1.0f)
+        {
+            _body.Size = new Vector2(ContentWidth, measured);
+        }
+
+        float choicesTop = BodyTop + measured + 22.0f;
+        if (Mathf.Abs(_choices.Position.Y - choicesTop) > 1.0f)
+        {
+            _choices.Position = new Vector2(ContentLeft, choicesTop);
+        }
     }
 
     public void HideScreen()

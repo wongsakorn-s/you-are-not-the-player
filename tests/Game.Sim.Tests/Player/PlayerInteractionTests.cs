@@ -230,10 +230,22 @@ public sealed class PlayerInteractionTests
         PlayerSessionController controller = session.PlayerController;
         controller.SetPlayerEntity(BasementScenario.George);
 
-        // George inspects the guest registry, creating an episodic memory
+        // Inspecting something is not a clue about anybody, so it must not reach
+        // the case file - it used to, and could then be put to a character's face
+        // as though it were evidence against them.
         ObjectActionResult inspectResult = controller.InspectObject("lobby-guest-registry");
         Assert.True(inspectResult.Succeeded);
         Assert.NotNull(inspectResult.GeneratedEvent);
+        Assert.DoesNotContain(
+            controller.GetJournal().Entries,
+            entry => entry.Subject == BasementScenario.George);
+
+        // Let the night run until George has actually seen someone else do
+        // something, and confront with that instead.
+        for (int tick = 0; tick < 12 && controller.GetJournal().Entries.Count == 0; tick++)
+        {
+            _ = session.AdvanceOneTick();
+        }
 
         PlayerJournal journal = controller.GetJournal();
         Assert.NotEmpty(journal.Entries);
@@ -242,7 +254,6 @@ public sealed class PlayerInteractionTests
 
         Assert.True(outcome.Succeeded);
         Assert.Contains("anna", outcome.Text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("george", outcome.Text, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

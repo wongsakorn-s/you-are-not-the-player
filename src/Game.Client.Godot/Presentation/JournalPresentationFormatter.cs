@@ -105,9 +105,14 @@ public static class JournalPresentationFormatter
         _ = text.AppendLine(useThai
             ? $"ขณะนี้อยู่ที่ {displayLocation(journal.CurrentLocation)}  •  เวลา {FormatClock(journal.CurrentTime.Tick)}"
             : $"Currently at {displayLocation(journal.CurrentLocation)}  •  {FormatClock(journal.CurrentTime.Tick)}");
-        _ = text.AppendLine(useThai
-            ? $"เบาะแส {(entries.Length == 0 ? 0 : (safePageIndex * safePageSize) + 1)}-{Math.Min(entries.Length, (safePageIndex + 1) * safePageSize)} จาก {entries.Length}"
-            : $"Clues {(entries.Length == 0 ? 0 : (safePageIndex * safePageSize) + 1)}-{Math.Min(entries.Length, (safePageIndex + 1) * safePageSize)} of {entries.Length}");
+        // "Clues 0-0 of 0" is a worse way of saying the file is empty than saying
+        // nothing at all, and an empty file is now normal at the start of a shift.
+        if (entries.Length > 0)
+        {
+            _ = text.AppendLine(useThai
+                ? $"เบาะแส {(safePageIndex * safePageSize) + 1}-{Math.Min(entries.Length, (safePageIndex + 1) * safePageSize)} จาก {entries.Length}"
+                : $"Clues {(safePageIndex * safePageSize) + 1}-{Math.Min(entries.Length, (safePageIndex + 1) * safePageSize)} of {entries.Length}");
+        }
         if (filter is not null && !filter.IsEmpty)
         {
             _ = text.AppendLine(useThai
