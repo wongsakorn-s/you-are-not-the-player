@@ -2571,9 +2571,11 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 6. **Milestone 6 — First Fun Playtest (เริ่มแล้ว):** เล่นคืนแรกภายในด้วย `--night-report`
 ครบ 15 seed และบันทึกผลไว้ที่ `playtest/first-night-findings.md`; ก่อนเชิญผู้ทดสอบภายนอก
 ต้องตัดสินใจเรื่องบาลานซ์ที่พบก่อน แล้วจึงทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding,
-suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent
-โดย `playtest/protocol.md` ยังต้องเพิ่ม metric ของ Exposure / Contradiction / Closing Net
-และฉากจบสามทาง ซึ่งตอนนี้ยังไม่มีในตารางวัด.
+suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent;
+`playtest/protocol.md` และ `playtest/feedback-template.md` ครอบคลุมคำให้การ, การจับโกหก,
+ป้ายความสงสัยที่มีต่อผู้เล่นเอง, ฉากที่โรงแรมลงมือ และฉากจบทั้งสี่แบบแล้ว พร้อมเตือน moderator
+ว่าคืนแรกของทุกคนคือ seed เดียวกัน (`481516`) ซึ่งเป็นคืนที่ข้อมูลเยอะที่สุดใน 15 คืนที่วัด
+จึงต้องให้ผู้เล่นเล่นรอบสองก่อนสรุป.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
 8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 285/285 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
@@ -2604,7 +2606,7 @@ suspect diversity, hypothesis changes, false-positive understanding, pacing แ�
 - [x] เล่นคืนแรกภายในครบ 15 seed ด้วย `--night-report` และบันทึกผลไว้
 - [x] ปรับบาลานซ์จากผลคืนแรก (เกณฑ์ exposure, จังหวะ Closing Net, ถ้อยคำที่เฉลยคำตอบ) แล้ววัดซ้ำ
 - [ ] แก้ให้การอนุมานจากเบาะแสธรรมดาชี้ถูกคนโดยไม่ต้องพึ่ง anomaly
-- [ ] เพิ่ม metric ของ Exposure / Contradiction / Closing Net และฉากจบสามทางลงใน playtest protocol
+- [x] เพิ่ม metric ของ Exposure / Contradiction / Closing Net และฉากจบลงใน playtest protocol และแบบฟอร์ม
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ
 
