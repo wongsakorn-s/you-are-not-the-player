@@ -24,8 +24,9 @@ public sealed class DialogueNarrativeFormatterTests
             id => id.Value,
             location => location.Value);
 
-        Assert.Contains("night rounds", result, StringComparison.Ordinal);
+        Assert.Equal(LoadCatalog().GetLines("anna").Schedule, result);
         Assert.DoesNotContain("anna:", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("raw fallback", result, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,7 +48,10 @@ public sealed class DialogueNarrativeFormatterTests
             id => id.Value,
             location => location.Value);
 
-        Assert.Contains("No clean sighting", result, StringComparison.Ordinal);
+        Assert.Equal(
+            LoadCatalog().GetLines("bob").AskAboutSubjectNoMemory
+                .Replace("{subject}", "charlie", StringComparison.Ordinal),
+            result);
         Assert.Contains("charlie", result, StringComparison.Ordinal);
     }
 
@@ -69,7 +73,10 @@ public sealed class DialogueNarrativeFormatterTests
             location => location.Value,
             useThai: true);
 
-        Assert.Contains("ฉันกำลังตรวจรอบกลางคืน", result, StringComparison.Ordinal);
+        DialogueCharacterLines lines = LoadCatalog().GetLines("anna");
+        Assert.Equal(lines.Thai!.Schedule, result);
+        Assert.NotEqual(lines.Schedule, result);
+        Assert.DoesNotContain(result, "abcdefghijklmnopqrstuvwxyz", StringComparison.OrdinalIgnoreCase);
     }
 
     private static DialogueCatalogDefinition LoadCatalog() =>

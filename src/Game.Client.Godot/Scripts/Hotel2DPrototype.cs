@@ -82,6 +82,7 @@ public sealed partial class Hotel2DPrototype : Node2D
     private Label? _eventLabel;
     private Label? _currentLocationLabel;
     private Label? _contextLabel;
+    private Label? _roomRosterLabel;
     private Label? _caseTitleLabel;
     private Label? _instructionLabel;
     private Label? _roleLabel;
@@ -281,6 +282,52 @@ public sealed partial class Hotel2DPrototype : Node2D
         RunSmokeTest(delta);
         RunNightReport();
         RunCapture();
+    }
+
+    /// <summary>
+    /// The number keys the action buttons have always claimed to have.
+    /// </summary>
+    /// <remarks>
+    /// The panel labelled its buttons 1, 2 and 5 and nothing in the client ever
+    /// read a key, so the digits were decoration that collided with the counts
+    /// printed after them. They work now, and the two buttons that had no digit
+    /// have one.
+    /// </remarks>
+    public override void _UnhandledKeyInput(InputEvent @event)
+    {
+        if (@event is not InputEventKey { Pressed: true, Echo: false } key ||
+            _investigationOverlay is { IsOpen: true } ||
+            !_gameStarted ||
+            _gameEnded)
+        {
+            return;
+        }
+
+        switch (key.Keycode)
+        {
+            case Key.Key1 when _talkButton is { Disabled: false }:
+                OpenSelectedConversation();
+                break;
+            case Key.Key2 when _followButton is { Disabled: false }:
+                ToggleFollowSelected();
+                break;
+            case Key.Key3 when _inspectButton is { Disabled: false }:
+                OpenInspectionChoices();
+                break;
+            case Key.Key4 when _journalButton is not null:
+                OpenJournal();
+                break;
+            case Key.Key5 when _evidenceButton is { Disabled: false }:
+                OpenEvidenceSelection();
+                break;
+            case Key.Escape:
+                ShowPauseMenu();
+                break;
+            default:
+                return;
+        }
+
+        GetViewport().SetInputAsHandled();
     }
 
     private void OpenCaptureScreen()
@@ -563,6 +610,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         PanelGap();
 
         _contextLabel = PanelHeading(T("PRESENT HERE", "อยู่ที่นี่"));
+        _roomRosterLabel = PanelText(string.Empty, 78.0f, 12, new Color("b7c2d8"));
         _actorSelector = new OptionButton
         {
             Position = new Vector2(PanelLeft, _panelCursor),
@@ -604,6 +652,10 @@ public sealed partial class Hotel2DPrototype : Node2D
         };
         AddChild(_objectSelector);
 
+        // The four actions sit at the foot of the panel whatever is above them.
+        // Letting them flow after variable-height text meant the roster growing
+        // by two lines pushed the accusation button off the bottom of the screen.
+        _panelCursor = ActionButtonTop;
         _inspectButton = PanelButton(
             T("LOOK AROUND", "สำรวจห้อง"),
             OpenInspectionChoices,
@@ -1112,11 +1164,28 @@ public sealed partial class Hotel2DPrototype : Node2D
         _presentActors = _simulation.PlayerController.GetPresentActors();
         _presentObjects = _simulation.GetPresentObjects();
 
+        // Names and jobs, not a headcount. Six coloured dots in one room is
+        // not something a player can act on, and the tokens cannot carry six
+        // labels without them landing on top of one another.
+        string[] here =
+        [
+            .. _presentActors
+                .Where(actor => actor != _humanHost)
+                .Select(actor => _characters.TryGetValue(actor, out CharacterDefinition? person)
+                    ? $"{DisplayName(actor)} — {DisplayRole(person)}"
+                    : DisplayName(actor)),
+        ];
+
         if (_contextLabel is not null)
         {
-            _contextLabel.Text =
-                $"{T("IN THIS ROOM", "ในห้องนี้")}: {DisplayLocation(_simulation.PlayerController.CurrentLocation)}  •  " +
-                $"{_presentActors.Count} {T("people", "คน")}";
+            _contextLabel.Text = T("PRESENT HERE", "อยู่ที่นี่");
+        }
+
+        if (_roomRosterLabel is not null)
+        {
+            _roomRosterLabel.Text = here.Length == 0
+                ? T("Nobody but you.", "มีแต่คุณคนเดียว")
+                : string.Join("\n", here);
         }
 
         if (_currentLocationLabel is not null)
@@ -1200,8 +1269,8 @@ public sealed partial class Hotel2DPrototype : Node2D
         _objectSelector.Disabled = !hasObjects;
         _inspectButton.Disabled = !hasObjects;
         _inspectButton.Text = hasObjects
-            ? $"{T("LOOK AROUND", "สำรวจห้อง")}  •  {_presentObjects.Count}"
-            : T("NOTHING TO INSPECT", "ไม่มีสิ่งให้ตรวจ");
+            ? $"3  {T("LOOK AROUND", "สำรวจห้อง")}  •  {_presentObjects.Count}"
+            : T("3  NOTHING TO INSPECT", "3  ไม่มีสิ่งให้ตรวจ");
         if (!hasObjects)
         {
             _objectSelector.AddItem(T("Nothing to inspect", "ไม่มีวัตถุให้ตรวจสอบ"));
@@ -1213,7 +1282,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             int clueCount = _simulation.GetPlayerJournal(_humanHost).Entries.Count;
             if (_journalButton is not null)
             {
-                _journalButton.Text = $"{T("OPEN CASE FILE", "เปิดแฟ้มคดี")}  •  {clueCount}";
+                _journalButton.Text =
+                    $"4  {T("OPEN CASE FILE", "เปิดแฟ้มคดี")}  •  {clueCount}";
             }
             _deduceButton.Disabled = _gameEnded || clueCount < 2;
         }
@@ -1714,7 +1784,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             request,
             outcome,
             DisplayName,
-            DisplayLocation,
+            // Spoken lines want the room's name, not the sign above its door.
+            LocationInProse,
             objectName,
             useThai: _isThai);
     }
@@ -1849,7 +1920,9 @@ public sealed partial class Hotel2DPrototype : Node2D
         JournalPage page = JournalPresentationFormatter.FormatPage(
             journal,
             DisplayName,
-            DisplayLocation,
+            // Clues are sentences about people, so rooms are named the way they
+            // would be said out loud rather than the way they are signposted.
+            LocationInProse,
             BuildJournalFilter(view, journal),
             pageIndex,
             pageSize: 2,
@@ -2117,7 +2190,49 @@ public sealed partial class Hotel2DPrototype : Node2D
             allowClose,
             DescribeSubject(subject),
             nameEntryPlaceholder,
-            nameEntryValue);
+            nameEntryValue,
+            subject is null ? BuildNightStatus() : null);
+    }
+
+    /// <summary>
+    /// What the rail carries on a screen that is not about a person.
+    /// </summary>
+    /// <remarks>
+    /// The column is 230 pixels of the panel and it used to hold an anonymous
+    /// silhouette captioned SUBJECT PROFILE on every screen that had no subject,
+    /// which is most of them. These are the five numbers a player checks a
+    /// case file to find out.
+    /// </remarks>
+    private IReadOnlyList<StatusLine>? BuildNightStatus()
+    {
+        if (_simulation is null || !_gameStarted || _gameEnded)
+        {
+            return null;
+        }
+
+        long remaining = Math.Max(0L, NightShiftDirector.DeadlineTick - _simulation.CurrentTick);
+        PlayerJournal journal = _simulation.GetPlayerJournal(_humanHost);
+        ExposureReport exposure = _simulation.GetExposure(_humanHost);
+        return
+        [
+            new StatusLine(
+                T("TIME LEFT", "เวลาที่เหลือ"),
+                T($"{remaining} min", $"{remaining} นาที"),
+                remaining <= 45 ? "e06c75" : null),
+            new StatusLine(
+                T("ON SHIFT", "ผู้เข้ากะ"),
+                HostName()),
+            new StatusLine(
+                T("CLUES", "เบาะแส"),
+                journal.Entries.Count.ToString(CultureInfo.InvariantCulture)),
+            new StatusLine(
+                T("STATEMENTS", "คำให้การ"),
+                _simulation.Claims.Count.ToString(CultureInfo.InvariantCulture)),
+            new StatusLine(
+                T("HOW YOU LOOK", "คนอื่นมองคุณยังไง"),
+                ExposureFormatter.FormatLevel(exposure.Level, _isThai),
+                ExposureColors[exposure.Level]),
+        ];
     }
 
     /// <summary>The portrait card for whoever a screen is about.</summary>
@@ -2366,9 +2481,37 @@ public sealed partial class Hotel2DPrototype : Node2D
         // The player never got to make an accusation, so the case file cannot
         // close. What the night leaves behind is what they did when it was their
         // turn to be the suspect.
+        (string endingTitle, string endingBody) = choice == PlayerClimaxChoice.Flee
+            ? (T("THE DOOR BEHIND YOU", "ประตูข้างหลัง"),
+                T(
+                    "[host] goes through the garden door and does not look back. " +
+                        "Nobody follows; there is a shift to finish and a hotel to " +
+                        "keep open.\n\nThe case stays open with a name in it. " +
+                        "Whatever was moving through this building tonight is " +
+                        "still moving through it.",
+                    "[host] ออกทางประตูสวนโดยไม่หันกลับมามอง ไม่มีใครตามไป " +
+                        "เพราะยังมีกะที่ต้องทำให้จบ และโรงแรมที่ต้องเปิดต่อ\n\n" +
+                        "คดีถูกปิดค้างไว้พร้อมชื่อหนึ่งชื่อในนั้น " +
+                        "ส่วนสิ่งที่เคลื่อนไหวอยู่ในตึกนี้คืนนี้ ก็ยังเคลื่อนไหวอยู่"))
+            : (T("YOU TALKED YOUR WAY OUT", "คุณพูดจนรอดมาได้"),
+                T(
+                    "[host] takes their account apart in front of them: the times " +
+                        "that do not line up, the room two of them cannot both " +
+                        "have been in.\n\nThe group comes apart. They go back to " +
+                        "their posts less certain of each other than they were an " +
+                        "hour ago, which is its own kind of damage.",
+                    "[host] รื้อคำให้การของพวกเขาต่อหน้าทีละข้อ ทั้งเวลาที่ไม่ตรงกัน " +
+                        "และห้องที่สองคนอยู่พร้อมกันไม่ได้\n\n" +
+                        "กลุ่มนั้นแตกออกจากกัน ทุกคนกลับไปประจำที่ของตัวเอง " +
+                        "โดยไว้ใจกันน้อยลงกว่าเมื่อชั่วโมงก่อน ซึ่งก็เป็นความเสียหายอีกแบบหนึ่ง"));
+
+        // The simulation writes one English paragraph for each choice and asserts
+        // things about the world it is not allowed to know. What it is good for
+        // here is the outcome flag; the words belong to the client, like every
+        // other ending.
         ShowInvestigationScreen(
-            LocalizeText(resolution.Title),
-            LocalizeText(resolution.NarrativeText),
+            endingTitle,
+            endingBody,
             new Color(resolution.PlayerVindicated ? "77dd77" : "e06c75"),
             [
                 new InvestigationChoice(
@@ -4122,6 +4265,9 @@ public sealed partial class Hotel2DPrototype : Node2D
     private const float PanelLeft = 895.0f;
     private const float PanelWidth = 340.0f;
     private const float PanelTop = 96.0f;
+
+    /// <summary>Where the action buttons begin, measured from the top.</summary>
+    private const float ActionButtonTop = 546.0f;
 
     private float _panelCursor = PanelTop;
 

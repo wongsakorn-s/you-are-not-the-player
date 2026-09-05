@@ -17,9 +17,21 @@ public sealed class DialogueCatalogDefinitionParserTests
             File.ReadAllText(path));
 
         Assert.Equal(6, catalog.Characters.Count);
-        Assert.Contains("night rounds", catalog.GetLines("anna").Schedule, StringComparison.Ordinal);
-        Assert.Contains("security", catalog.GetLines("bob").Schedule, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEqual(catalog.GetLines("anna").Confront, catalog.GetLines("bob").Confront);
+        // Six people, six voices: no two of them answer the same question with
+        // the same sentence in either language.
+        foreach (string line in new[] { "Schedule", "Confront", "ObjectLine" })
+        {
+            string[] spoken =
+            [
+                .. catalog.Characters.Values.Select(lines => line switch
+                {
+                    "Schedule" => lines.Schedule,
+                    "Confront" => lines.Confront,
+                    _ => lines.ObjectLine,
+                }),
+            ];
+            Assert.Equal(spoken.Length, spoken.Distinct(StringComparer.Ordinal).Count());
+        }
         Assert.NotNull(catalog.GetLines("anna").Thai);
         Assert.NotNull(catalog.GetLines("george").Thai);
 

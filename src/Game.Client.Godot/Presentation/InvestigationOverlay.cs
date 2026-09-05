@@ -5,6 +5,9 @@ namespace Game.Client.Godot.Presentation;
 public sealed record InvestigationChoice(string Label, Action Selected);
 
 /// <summary>Who the screen is about: the portrait and the card beneath it.</summary>
+/// <summary>One line on the rail when a screen is not about a person.</summary>
+public sealed record StatusLine(string Label, string Value, string? Accent = null);
+
 public sealed record PortraitSubject(
     string CharacterId,
     Color Accent,
@@ -22,6 +25,8 @@ public sealed partial class InvestigationOverlay : Control
     private GridContainer? _choices;
     private Button? _close;
     private LineEdit? _nameEntry;
+    private VBoxContainer? _status;
+    private Panel? _panel;
     private StyleBoxFlat? _panelStyle;
     private Tween? _transition;
     private bool _comfortableText;
@@ -52,6 +57,7 @@ public sealed partial class InvestigationOverlay : Control
             Position = new Vector2(70.0f, 115.0f),
             Size = new Vector2(1140.0f, 560.0f),
         };
+        _panel = panel;
         _panelStyle = new StyleBoxFlat
         {
             BgColor = new Color("171d2a"),
@@ -93,6 +99,19 @@ public sealed partial class InvestigationOverlay : Control
         _portraitText.AddThemeFontSizeOverride("font_size", 16);
         _portrait.AddChild(_portraitText);
 
+        // The rail is the same width whatever a screen is about, so the text
+        // column never moves. When there is nobody to show, it carries the state
+        // of the night rather than an empty silhouette captioned SUBJECT PROFILE.
+        _status = new VBoxContainer
+        {
+            Position = new Vector2(24.0f, 46.0f),
+            Size = new Vector2(230.0f, 430.0f),
+            Visible = false,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _status.AddThemeConstantOverride("separation", 14);
+        panel.AddChild(_status);
+
         _title = new Label
         {
             Position = new Vector2(285.0f, 24.0f),
@@ -104,8 +123,8 @@ public sealed partial class InvestigationOverlay : Control
 
         _time = new Label
         {
-            Position = new Vector2(795.0f, 27.0f),
-            Size = new Vector2(205.0f, 34.0f),
+            Position = new Vector2(760.0f, 27.0f),
+            Size = new Vector2(215.0f, 34.0f),
             HorizontalAlignment = HorizontalAlignment.Right,
             MouseFilter = MouseFilterEnum.Ignore,
         };
@@ -174,6 +193,53 @@ public sealed partial class InvestigationOverlay : Control
         }
     }
 
+    private void BuildStatusRail(IReadOnlyList<StatusLine>? status, Color accent)
+    {
+        if (_status is null || _portrait is null)
+        {
+            return;
+        }
+
+        foreach (Node child in _status.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        _status.Visible = status is { Count: > 0 };
+        _portrait.Visible = !_status.Visible;
+        if (!_status.Visible)
+        {
+            return;
+        }
+
+        foreach (StatusLine line in status!)
+        {
+            var caption = new Label
+            {
+                Text = line.Label,
+                MouseFilter = MouseFilterEnum.Ignore,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                CustomMinimumSize = new Vector2(214.0f, 0.0f),
+            };
+            caption.AddThemeFontSizeOverride("font_size", 12);
+            caption.AddThemeColorOverride("font_color", new Color("75829e"));
+            _status.AddChild(caption);
+
+            var value = new Label
+            {
+                Text = line.Value,
+                MouseFilter = MouseFilterEnum.Ignore,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                CustomMinimumSize = new Vector2(214.0f, 0.0f),
+            };
+            value.AddThemeFontSizeOverride("font_size", 17);
+            value.AddThemeColorOverride(
+                "font_color",
+                line.Accent is null ? accent : new Color(line.Accent));
+            _status.AddChild(value);
+        }
+    }
+
     /// <summary>What the player typed, trimmed, or null if they typed nothing.</summary>
     public string? NameEntryText =>
         string.IsNullOrWhiteSpace(_nameEntry?.Text) ? null : _nameEntry!.Text.Trim();
@@ -208,7 +274,8 @@ public sealed partial class InvestigationOverlay : Control
         bool allowClose = true,
         PortraitSubject? subject = null,
         string? nameEntryPlaceholder = null,
-        string? nameEntryValue = null)
+        string? nameEntryValue = null,
+        IReadOnlyList<StatusLine>? status = null)
     {
         if (_title is null || _body is null || _choices is null || _panelStyle is null)
         {
@@ -224,7 +291,7 @@ public sealed partial class InvestigationOverlay : Control
             _portrait?.SetAccent(accent);
             if (_portraitText is not null)
             {
-                _portraitText.Text = _subjectlessCaption;
+                _portraitText.Text = status is { Count: > 0 } ? string.Empty : _subjectlessCaption;
                 _portraitText.AddThemeColorOverride("font_color", new Color("75829e"));
             }
         }
@@ -253,6 +320,7 @@ public sealed partial class InvestigationOverlay : Control
             }
         }
 
+        BuildStatusRail(status, accent);
         _body.Text = body;
         ApplyLayout();
         if (_close is not null)
@@ -329,7 +397,7 @@ public sealed partial class InvestigationOverlay : Control
             return;
         }
 
-        _portrait.Visible = true;
+        _portrait.Visible = _status is not { Visible: true };
         _title.Position = new Vector2(ContentLeft, 24.0f);
         _title.Size = new Vector2(500.0f, 44.0f);
         _body.Position = new Vector2(ContentLeft, BodyTop);
@@ -372,6 +440,23 @@ public sealed partial class InvestigationOverlay : Control
         if (Mathf.Abs(_choices.Position.Y - cursor) > 1.0f)
         {
             _choices.Position = new Vector2(ContentLeft, cursor);
+        }
+
+        // The panel used to be 560 tall whatever it held, so a four-button screen
+        // sat in a box with two hundred empty pixels under it.
+        if (_panel is not null)
+        {
+            float needed = Mathf.Max(
+                cursor + _choices.Size.Y + 28.0f,
+                _status is { Visible: true }
+                    ? _status.GetCombinedMinimumSize().Y + 92.0f
+                    : 500.0f);
+            float height = Mathf.Clamp(needed, 320.0f, 566.0f);
+            if (Mathf.Abs(_panel.Size.Y - height) > 1.0f)
+            {
+                _panel.Size = new Vector2(_panel.Size.X, height);
+                _panel.Position = new Vector2(_panel.Position.X, (720.0f - height) / 2.0f);
+            }
         }
     }
 
