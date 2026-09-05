@@ -57,7 +57,7 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource, INpcRoutineDecis
                 $"Safe location '{profile.SafeLocation}' is forbidden for '{profile.Entity}'.");
         }
 
-        ContactBelief? contact = FindKnownContact(profile);
+        ContactBelief[] contacts = FindKnownContacts(profile);
         var goals = new List<GoalCandidate>();
         foreach (SuspicionSnapshot snapshot in _suspicion.GetKnownSuspicions(
             context.Entity.Id,
@@ -78,7 +78,7 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource, INpcRoutineDecis
                     mayAttend: !_attentionRest.TryGetValue(context.Entity.Id, out int rest) || rest <= 0);
             }
 
-            if (contact is not null)
+            foreach (ContactBelief contact in contacts)
             {
                 AddSocialGoals(
                     goals,
@@ -140,18 +140,31 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource, INpcRoutineDecis
         _attentionRest[decision.Entity] = _policy.AttentionRestDecisions;
     }
 
-    private ContactBelief? FindKnownContact(SuspicionBehaviorProfile profile)
+    /// <summary>
+    /// Everyone this character could pass something on to right now.
+    /// </summary>
+    /// <remarks>
+    /// This used to return the first contact whose whereabouts were known, so
+    /// each character spent the night confiding in exactly one other person. Only
+    /// the manager lists the receptionist first, so on any night the manager was
+    /// the one being steered - and therefore not in this roster at all - nobody
+    /// ever turned to the night porter. Measured over seven nights the cast made
+    /// two to three hundred attempts to pass something on and not one of them was
+    /// aimed at the player, which is why the case file was first-hand only.
+    /// </remarks>
+    private ContactBelief[] FindKnownContacts(SuspicionBehaviorProfile profile)
     {
+        var known = new List<ContactBelief>();
         foreach (EntityId contact in profile.Contacts)
         {
             LocationId? location = _memories.GetLastKnownLocation(profile.Entity, contact);
             if (location is LocationId knownLocation)
             {
-                return new ContactBelief(contact, knownLocation);
+                known.Add(new ContactBelief(contact, knownLocation));
             }
         }
 
-        return null;
+        return [.. known];
     }
 
     private void AddTargetGoals(

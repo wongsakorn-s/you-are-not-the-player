@@ -3582,8 +3582,31 @@ public sealed partial class Hotel2DPrototype : Node2D
             .FirstOrDefault(actor => actor != _humanHost);
         IReadOnlyList<InteractiveObject> here = _simulation.GetPresentObjects();
         InteractiveObject? nearby = here.Count > 0 ? here[0] : null;
-        switch (_nightActionIndex % 3)
+        switch (_nightActionIndex % 4)
         {
+            // Asking one person about another is the channel the game actually
+            // provides for second-hand information, and the report never used
+            // it - which made "the player is told nothing" a fact about this
+            // walker rather than about the game.
+            case 3 when !partner.IsEmpty:
+                EntityId about = _characters.Keys.FirstOrDefault(
+                    other => other != _humanHost && other != partner);
+                if (about.IsEmpty)
+                {
+                    break;
+                }
+
+                DialogueOutcome gossip = _simulation.Talk(new DialogueRequest(
+                    DialogueActionKind.AskAboutSubject,
+                    _humanHost,
+                    partner,
+                    subject: about));
+                _nightReport.Action(
+                    tick,
+                    $"asks {DisplayName(partner)} about {DisplayName(about)} — " +
+                    (gossip.TransferredMemory is null ? "they had nothing" : "they passed something on"));
+                break;
+
             case 0 when !partner.IsEmpty:
                 DialogueOutcome asked = _simulation.Talk(new DialogueRequest(
                     DialogueActionKind.InquireSchedule,
@@ -3738,9 +3761,13 @@ public sealed partial class Hotel2DPrototype : Node2D
             EventType.Theft or EventType.SecretMeeting or EventType.NightActivity);
         int shares = _simulation.Decisions.Count(
             decision => decision.Goal.Type == GoalType.ShareSuspicion);
+        int sharesToYou = _simulation.Decisions.Count(
+            decision => decision.Goal.Type == GoalType.ShareSuspicion &&
+                decision.Goal.InteractionPartner == _humanHost);
         int heard = journal.Entries.Count(entry => entry.InformationSource is not null);
         return $"{_truth.Secrets.Count} / {acts} / {learned}" +
-            $"; share attempts {shares}, clues you were told rather than saw {heard}";
+            $"; share attempts {shares} ({sharesToYou} aimed at you)" +
+            $", clues you were told rather than saw {heard}";
     }
 
     private static float TotalSuspicion(SuspicionSnapshot snapshot) =>
