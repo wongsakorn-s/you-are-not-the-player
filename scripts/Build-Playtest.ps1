@@ -5,7 +5,8 @@ param(
     [string] $OutputDirectory = 'artifacts/playtest',
     [string] $GodotPath = 'godot',
     [switch] $SkipTests,
-    [switch] $SkipZip
+    [switch] $SkipZip,
+    [switch] $SkipVerify
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,9 +34,27 @@ if ($null -eq $godotCommand) {
     $godotExecutable = $godotCommand.Source
 }
 
+# The plain Windows binary detaches from the console: it returns exit code 0
+# immediately and writes its output nowhere, so a failed export looks identical
+# to a successful one and the files are still being written when the script
+# moves on. The console build is the same engine attached to stdout.
+$consoleExecutable = Join-Path (Split-Path -Parent $godotExecutable) 'godot_console.exe'
+if (Test-Path -LiteralPath $consoleExecutable) {
+    $godotExecutable = $consoleExecutable
+}
+
 $presetPath = Join-Path $projectDirectory 'export_presets.cfg'
 if (-not (Test-Path -LiteralPath $presetPath)) {
     throw "Missing export preset: $presetPath"
+}
+
+# Godot's export plugin refuses to build the C# side unless a solution sits
+# beside the project, and it reports that refusal as a warning with exit code
+# zero. The export then ships an engine with no managed assemblies in it, which
+# crashes on the first frame - on the tester's machine, not here.
+$clientSolution = Join-Path $projectDirectory 'Game.Client.Godot.sln'
+if (-not (Test-Path -LiteralPath $clientSolution)) {
+    throw "Missing $clientSolution. Godot needs a solution in the project directory or it exports no C#."
 }
 
 $templateDirectory = Join-Path $env:APPDATA 'Godot/export_templates/4.7.2.stable.mono'
@@ -76,6 +95,42 @@ Invoke-Checked $godotExecutable @(
     $executablePath
 )
 
+# Godot exits zero on an export that produced nothing usable, so the exit code
+# is not evidence. These three are.
+foreach ($required in @(
+        $executablePath,
+        (Join-Path $stagingDirectory 'YOU ARE NOT THE PLAYER.pck'),
+        (Join-Path $stagingDirectory 'data_Game.Client.Godot_windows_x86_64'))) {
+    if (-not (Test-Path -LiteralPath $required)) {
+        throw "Export did not produce '$required'. Run the same command with godot_console.exe and read the output."
+    }
+}
+
+if (-not $SkipVerify) {
+    # Play a night in the thing that is about to be handed to somebody. It loads
+    # the content files, runs a full shift and writes a report, so a package that
+    # cannot start cannot pass. The exported binary writes no console output, so
+    # the report file is the signal.
+    $probeReport = Join-Path $outputRoot 'export-verification.md'
+    if (Test-Path -LiteralPath $probeReport) {
+        Remove-Item -LiteralPath $probeReport -Force
+    }
+
+    # Start-Process joins ArgumentList on spaces without quoting anything, and
+    # this repository lives in a path with spaces in it.
+    $probe = Start-Process -FilePath $executablePath -Wait -PassThru -NoNewWindow -ArgumentList @(
+        '--headless', '--', '--night-report', "`"$probeReport`"", '--night-seed', '3')
+    if ($probe.ExitCode -ne 0) {
+        throw "The exported build exited with $($probe.ExitCode) instead of playing a night."
+    }
+
+    if (-not (Test-Path -LiteralPath $probeReport)) {
+        throw "The exported build started but never finished a night. Package not written."
+    }
+
+    Write-Host "Verified: the exported build played a full night."
+}
+
 Copy-Item -LiteralPath (Join-Path $repoRoot 'playtest/README.md') -Destination $stagingDirectory
 Copy-Item -LiteralPath (Join-Path $repoRoot 'playtest/feedback-template.md') -Destination $stagingDirectory
 
@@ -98,7 +153,14 @@ if (-not $SkipZip) {
     }
 
     Compress-Archive -Path (Join-Path $stagingDirectory '*') -DestinationPath $zipPath -CompressionLevel Optimal
-    Write-Host "Playtest package: $zipPath"
+
+    # Compress-Archive skips files it cannot read and says nothing about it.
+    $zipLength = (Get-Item -LiteralPath $zipPath).Length
+    if ($zipLength -lt 10MB) {
+        throw "The package is only $([Math]::Round($zipLength / 1MB, 2)) MB, which is too small to contain the game."
+    }
+
+    Write-Host "Playtest package: $zipPath ($([Math]::Round($zipLength / 1MB, 1)) MB)"
 }
 
 Write-Host "Exported executable: $executablePath"

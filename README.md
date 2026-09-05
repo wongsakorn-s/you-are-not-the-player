@@ -147,9 +147,17 @@ godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn
 .\scripts\Build-Playtest.ps1 -GodotPath "C:\Path\To\godot.exe"
 ```
 
-สคริปต์จะ build/test solution, export preset `Windows Desktop`, สร้าง zip พร้อม
-คู่มือผู้เล่นและ feedback template จาก `playtest/` โดยไม่รวม source code ใน package;
+สคริปต์จะ build/test solution, export preset `Windows Desktop`, **เล่นหนึ่งคืนเต็มใน build
+ที่ export ออกมาแล้วจริง ๆ** ก่อนแพ็ก แล้วจึงสร้าง zip พร้อมคู่มือผู้เล่นและ feedback template
+จาก `playtest/` โดยไม่รวม source code ใน package;
 moderator ใช้ `playtest/protocol.md` จาก repository แยกต่างหาก ผู้ทดสอบต้องใช้ Godot 4.7.2 .NET export templates บนเครื่อง build เท่านั้น
+
+Godot ต้องการ solution อยู่ในโฟลเดอร์ของ Godot project เอง (`src/Game.Client.Godot/Game.Client.Godot.sln`)
+ไม่ใช่ `Game.sln` ที่ root — ถ้าไม่มี มันจะข้ามการ build C# ทั้งหมด **แล้วรายงานว่าสำเร็จ**
+ได้ไฟล์ที่รันแล้ว segfault ทันที สคริปต์จึงตรวจว่ามี solution ก่อนเริ่ม ตรวจว่า export ได้
+`.exe` / `.pck` / โฟลเดอร์ `data_*` ครบ เล่นหนึ่งคืนใน build นั้น และตรวจขนาด zip ก่อนจบ
+เพราะ exit code ของ Godot เชื่อไม่ได้ และ `godot.exe` บน Windows จะ detach จาก console
+(สคริปต์เลยเลือก `godot_console.exe` ให้อัตโนมัติถ้ามี)
 ติดตั้งผ่าน Godot Editor > Editor > Manage Export Templates ก่อนรันสคริปต์ครั้งแรก
 
 เอกสารการทดลองอยู่ในโฟลเดอร์ [playtest](playtest/README.md) โดย `README.md` สำหรับผู้เล่น,
