@@ -82,6 +82,7 @@ public sealed partial class Hotel2DPrototype : Node2D
     private Label? _eventLabel;
     private Label? _currentLocationLabel;
     private Label? _contextLabel;
+    private Label? _roomRosterLabel;
     private Label? _caseTitleLabel;
     private Label? _instructionLabel;
     private Label? _roleLabel;
@@ -212,8 +213,8 @@ public sealed partial class Hotel2DPrototype : Node2D
         _worldAdapter.Synchronize(GetCoreLocations(), immediate: true);
         RefreshStatus(
             T(
-                "Click a room to move George. The other characters follow the simulation.",
-                "คลิกห้องเพื่อย้ายจอร์จ ตัวละครอื่นจะเคลื่อนไหวตามจำลอง"));
+                "Click a room to move [host]. The other characters follow the simulation.",
+                "คลิกห้องเพื่อย้าย[host] ตัวละครอื่นจะเคลื่อนไหวตามจำลอง"));
         RefreshContextActions();
         RefreshProgress();
         RefreshExposure();
@@ -283,6 +284,52 @@ public sealed partial class Hotel2DPrototype : Node2D
         RunCapture();
     }
 
+    /// <summary>
+    /// The number keys the action buttons have always claimed to have.
+    /// </summary>
+    /// <remarks>
+    /// The panel labelled its buttons 1, 2 and 5 and nothing in the client ever
+    /// read a key, so the digits were decoration that collided with the counts
+    /// printed after them. They work now, and the two buttons that had no digit
+    /// have one.
+    /// </remarks>
+    public override void _UnhandledKeyInput(InputEvent @event)
+    {
+        if (@event is not InputEventKey { Pressed: true, Echo: false } key ||
+            _investigationOverlay is { IsOpen: true } ||
+            !_gameStarted ||
+            _gameEnded)
+        {
+            return;
+        }
+
+        switch (key.Keycode)
+        {
+            case Key.Key1 when _talkButton is { Disabled: false }:
+                OpenSelectedConversation();
+                break;
+            case Key.Key2 when _followButton is { Disabled: false }:
+                ToggleFollowSelected();
+                break;
+            case Key.Key3 when _inspectButton is { Disabled: false }:
+                OpenInspectionChoices();
+                break;
+            case Key.Key4 when _journalButton is not null:
+                OpenJournal();
+                break;
+            case Key.Key5 when _evidenceButton is { Disabled: false }:
+                OpenEvidenceSelection();
+                break;
+            case Key.Escape:
+                ShowPauseMenu();
+                break;
+            default:
+                return;
+        }
+
+        GetViewport().SetInputAsHandled();
+    }
+
     private void OpenCaptureScreen()
     {
         string? screen = OS.GetCmdlineUserArgs()
@@ -308,6 +355,12 @@ public sealed partial class Hotel2DPrototype : Node2D
                 break;
             case "deduce":
                 OpenFinalDeduction(deadlineReached: true);
+                break;
+            case "name":
+                ShowNameEntry();
+                break;
+            case "menu":
+                ShowMainMenu();
                 break;
             case "talk":
                 EntityId partner = _simulation?.PlayerController.GetPresentActors()
@@ -438,7 +491,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             ToggleInsightView);
         _insightButton.TooltipText = T(
             "Reveal each character's inferred current intention",
-            "แสดงเจตนาปัจจุบันที่จอร์จคาดเดาจากตัวละครแต่ละคน");
+            "แสดงเจตนาปัจจุบันที่[host]คาดเดาจากตัวละครแต่ละคน");
 
         _languageButton = AddActionButton(
             MenuButtonText(),
@@ -557,6 +610,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         PanelGap();
 
         _contextLabel = PanelHeading(T("PRESENT HERE", "อยู่ที่นี่"));
+        _roomRosterLabel = PanelText(string.Empty, 78.0f, 12, new Color("b7c2d8"));
         _actorSelector = new OptionButton
         {
             Position = new Vector2(PanelLeft, _panelCursor),
@@ -598,14 +652,18 @@ public sealed partial class Hotel2DPrototype : Node2D
         };
         AddChild(_objectSelector);
 
+        // The four actions sit at the foot of the panel whatever is above them.
+        // Letting them flow after variable-height text meant the roster growing
+        // by two lines pushed the accusation button off the bottom of the screen.
+        _panelCursor = ActionButtonTop;
         _inspectButton = PanelButton(
             T("LOOK AROUND", "สำรวจห้อง"),
             OpenInspectionChoices,
-            T("See what George can inspect in this room", "ดูสิ่งที่จอร์จตรวจสอบได้ในห้องนี้"));
+            T("See what [host] can inspect in this room", "ดูสิ่งที่[host]ตรวจสอบได้ในห้องนี้"));
         _journalButton = PanelButton(
             T("OPEN CASE FILE", "เปิดแฟ้มคดี"),
             OpenJournal,
-            T("Review the clues George remembers", "ทบทวนเบาะแสที่จอร์จจำได้"));
+            T("Review the clues [host] remembers", "ทบทวนเบาะแสที่[host]จำได้"));
         _evidenceButton = PanelButton(
             T("5  USE A CLUE", "5  ใช้เบาะแส"),
             OpenEvidenceSelection,
@@ -926,10 +984,10 @@ public sealed partial class Hotel2DPrototype : Node2D
             return;
         }
 
-        _nightReport?.Told(beat.Tick, T(beat.EnglishText, beat.ThaiText));
+        _nightReport?.Told(beat.Tick, BeatText(beat));
         _alertPanel.Visible = true;
         _alertLabel.Visible = true;
-        _alertLabel.Text = $"◆  {T(beat.EnglishText, beat.ThaiText)}";
+        _alertLabel.Text = $"◆  {BeatText(beat)}";
         _alertHideTick = beat.Tick + 10;
         _shiftHistory.Insert(0, beat);
         if (_shiftHistory.Count > 4)
@@ -947,8 +1005,34 @@ public sealed partial class Hotel2DPrototype : Node2D
             _ => new Color("d0a85b16"),
         };
         _atmosphereOverlay.Color = alertColor;
-        RefreshStatus(T(beat.EnglishText, beat.ThaiText));
+        RefreshStatus(BeatText(beat));
         RefreshEventFeed();
+    }
+
+    /// <summary>
+    /// A beat as the player reads it: their own name, the cast's names in the
+    /// language being read, and rooms called what the map calls them.
+    /// </summary>
+    private string BeatText(ShiftBeat beat)
+    {
+        string text = Personalize(T(beat.EnglishText, beat.ThaiText));
+        if (beat.ActorId is not null)
+        {
+            text = text.Replace(
+                "{actor}",
+                DisplayName(new EntityId(beat.ActorId)),
+                StringComparison.Ordinal);
+        }
+
+        if (beat.DestinationId is not null)
+        {
+            text = text.Replace(
+                "{room}",
+                LocationInProse(new LocationId(beat.DestinationId)),
+                StringComparison.Ordinal);
+        }
+
+        return text;
     }
 
     /// <summary>
@@ -1080,11 +1164,28 @@ public sealed partial class Hotel2DPrototype : Node2D
         _presentActors = _simulation.PlayerController.GetPresentActors();
         _presentObjects = _simulation.GetPresentObjects();
 
+        // Names and jobs, not a headcount. Six coloured dots in one room is
+        // not something a player can act on, and the tokens cannot carry six
+        // labels without them landing on top of one another.
+        string[] here =
+        [
+            .. _presentActors
+                .Where(actor => actor != _humanHost)
+                .Select(actor => _characters.TryGetValue(actor, out CharacterDefinition? person)
+                    ? $"{DisplayName(actor)} — {DisplayRole(person)}"
+                    : DisplayName(actor)),
+        ];
+
         if (_contextLabel is not null)
         {
-            _contextLabel.Text =
-                $"{T("IN THIS ROOM", "ในห้องนี้")}: {DisplayLocation(_simulation.PlayerController.CurrentLocation)}  •  " +
-                $"{_presentActors.Count} {T("people", "คน")}";
+            _contextLabel.Text = T("PRESENT HERE", "อยู่ที่นี่");
+        }
+
+        if (_roomRosterLabel is not null)
+        {
+            _roomRosterLabel.Text = here.Length == 0
+                ? T("Nobody but you.", "มีแต่คุณคนเดียว")
+                : string.Join("\n", here);
         }
 
         if (_currentLocationLabel is not null)
@@ -1168,8 +1269,8 @@ public sealed partial class Hotel2DPrototype : Node2D
         _objectSelector.Disabled = !hasObjects;
         _inspectButton.Disabled = !hasObjects;
         _inspectButton.Text = hasObjects
-            ? $"{T("LOOK AROUND", "สำรวจห้อง")}  •  {_presentObjects.Count}"
-            : T("NOTHING TO INSPECT", "ไม่มีสิ่งให้ตรวจ");
+            ? $"3  {T("LOOK AROUND", "สำรวจห้อง")}  •  {_presentObjects.Count}"
+            : T("3  NOTHING TO INSPECT", "3  ไม่มีสิ่งให้ตรวจ");
         if (!hasObjects)
         {
             _objectSelector.AddItem(T("Nothing to inspect", "ไม่มีวัตถุให้ตรวจสอบ"));
@@ -1181,7 +1282,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             int clueCount = _simulation.GetPlayerJournal(_humanHost).Entries.Count;
             if (_journalButton is not null)
             {
-                _journalButton.Text = $"{T("OPEN CASE FILE", "เปิดแฟ้มคดี")}  •  {clueCount}";
+                _journalButton.Text =
+                    $"4  {T("OPEN CASE FILE", "เปิดแฟ้มคดี")}  •  {clueCount}";
             }
             _deduceButton.Disabled = _gameEnded || clueCount < 2;
         }
@@ -1247,7 +1349,8 @@ public sealed partial class Hotel2DPrototype : Node2D
                 "Choose one action. Talking reveals claims; the Case File tells you whether a clue was seen or heard.",
                 "เลือกการกระทำหนึ่งอย่าง การคุยทำให้ได้คำกล่าวอ้าง ส่วนแฟ้มคดีจะบอกว่าเบาะแสนั้นเห็นเองหรือได้ยินมา"),
             new Color(_characters[actor].Color),
-            choices);
+            choices,
+            subject: actor);
     }
 
     private int FindPresentActorIndex(EntityId? actor)
@@ -1302,7 +1405,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         _followDestination = null;
         RefreshStatus(
             $"{T("Following", "กำลังติดตาม")} {DisplayName(_followTarget.Value)}. " +
-            T("George will mirror their room changes.", "จอร์จจะย้ายตามการเปลี่ยนห้องของเขา"));
+            T("[host] will mirror their room changes.", "[host]จะย้ายตามการเปลี่ยนห้องของเขา"));
         RefreshContextActions();
     }
 
@@ -1432,7 +1535,8 @@ public sealed partial class Hotel2DPrototype : Node2D
                 "Choose a topic. Their words are not automatically true; the game will label any clue you receive separately.",
                 "เลือกหัวข้อที่อยากถาม คำพูดของพวกเขาอาจไม่จริงเสมอไป และเบาะแสที่ได้จะถูกแยกบันทึกให้ชัดเจน"),
             new Color(_characters[partner].Color),
-            choices);
+            choices,
+            subject: partner);
     }
 
     private void ExecuteDialogue(EntityId partner, DialogueRequest request)
@@ -1489,7 +1593,8 @@ public sealed partial class Hotel2DPrototype : Node2D
                 "ถ้าเบาะแสถูก เขาต้องอธิบายตัวเอง " +
                     "แต่ถ้าผิด คุณเพิ่งกล่าวหาคนต่อหน้าเขา\n\n" + risk),
             new Color("f1d18a"),
-            choices);
+            choices,
+            subject: partner);
     }
 
     private void ExecuteChallenge(EntityId partner, Contradiction contradiction)
@@ -1554,7 +1659,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             new Color(color),
             [new InvestigationChoice(
                 T("Keep talking", "คุยต่อ"),
-                () => OpenConversation(partner))]);
+                () => OpenConversation(partner))],
+            subject: partner);
     }
 
     private void ShowRefusal(EntityId partner)
@@ -1573,7 +1679,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             new Color("e06c75"),
             [new InvestigationChoice(
                 T("Ask something else", "ถามอย่างอื่น"),
-                () => OpenConversation(partner))]);
+                () => OpenConversation(partner))],
+            subject: partner);
         RefreshStatus(T(
             $"{who} refused to talk about anyone else.",
             $"{who} ปฏิเสธที่จะพูดถึงคนอื่น"));
@@ -1651,7 +1758,10 @@ public sealed partial class Hotel2DPrototype : Node2D
             $"{T("CONVERSATION WITH", "บทสนทนากับ")} {DisplayName(partner)}",
             body,
             new Color(_characters[partner].Color),
-            [new InvestigationChoice(T("Ask something else", "ถามอย่างอื่น"), () => OpenConversation(partner))]);
+            [new InvestigationChoice(
+                T("Ask something else", "ถามอย่างอื่น"),
+                () => OpenConversation(partner))],
+            subject: partner);
         RefreshStatus(outcome.Succeeded
             ? $"{T("Conversation with", "บันทึกการสนทนากับ")} {DisplayName(partner)}"
             : body);
@@ -1674,7 +1784,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             request,
             outcome,
             DisplayName,
-            DisplayLocation,
+            // Spoken lines want the room's name, not the sign above its door.
+            LocationInProse,
             objectName,
             useThai: _isThai);
     }
@@ -1709,7 +1820,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         };
 
         return $"{T($"WHAT {DisplayName(partner)} SAYS", $"สิ่งที่ {DisplayName(partner)} พูด")}\n“{spokenLine}”\n\n" +
-            $"{T("GEORGE'S NOTE", "สิ่งที่จอร์จบันทึกไว้")}\n{note}";
+            $"{T("GEORGE'S NOTE", "สิ่งที่[host]บันทึกไว้")}\n{note}";
     }
 
     private void OpenInspectionChoices()
@@ -1735,8 +1846,8 @@ public sealed partial class Hotel2DPrototype : Node2D
         ShowInvestigationScreen(
             T("LOOK AROUND", "สำรวจห้อง"),
             T(
-                "Choose what George should inspect. An object may be useful, misleading, or already familiar.",
-                "เลือกสิ่งที่จอร์จควรตรวจสอบ วัตถุอาจมีประโยชน์ ชวนให้เข้าใจผิด หรือเป็นสิ่งที่รู้จักอยู่แล้ว"),
+                "Choose what [host] should inspect. An object may be useful, misleading, or already familiar.",
+                "เลือกสิ่งที่[host]ควรตรวจสอบ วัตถุอาจมีประโยชน์ ชวนให้เข้าใจผิด หรือเป็นสิ่งที่รู้จักอยู่แล้ว"),
             new Color("77dd77"),
             choices);
     }
@@ -1765,8 +1876,8 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         string body = clue is null
-            ? $"{T("WHAT GEORGE FOUND", "สิ่งที่จอร์จพบ")}\n{message}"
-            : $"{T("WHAT GEORGE FOUND", "สิ่งที่จอร์จพบ")}\n{message}\n\n" +
+            ? $"{T("WHAT GEORGE FOUND", "สิ่งที่[host]พบ")}\n{message}"
+            : $"{T("WHAT GEORGE FOUND", "สิ่งที่[host]พบ")}\n{message}\n\n" +
                 $"{T("CLUE ADDED TO THE JOURNAL", "เบาะแสที่บันทึกไว้")}\n{clue}";
         ShowInvestigationScreen(
             T("INVESTIGATION", "สืบสวน"),
@@ -1809,7 +1920,9 @@ public sealed partial class Hotel2DPrototype : Node2D
         JournalPage page = JournalPresentationFormatter.FormatPage(
             journal,
             DisplayName,
-            DisplayLocation,
+            // Clues are sentences about people, so rooms are named the way they
+            // would be said out loud rather than the way they are signposted.
+            LocationInProse,
             BuildJournalFilter(view, journal),
             pageIndex,
             pageSize: 2,
@@ -1867,7 +1980,7 @@ public sealed partial class Hotel2DPrototype : Node2D
                     T("IN THIS ROOM", "เหตุการณ์ในห้องนี้"),
                     () => OpenJournalPage(JournalView.CurrentRoom, 0)),
                 new InvestigationChoice(
-                    T("GEORGE SAW", "สิ่งที่จอร์จเห็นเอง"),
+                    T("GEORGE SAW", "สิ่งที่[host]เห็นเอง"),
                     () => OpenJournalPage(JournalView.SeenFirstHand, 0)),
                 new InvestigationChoice(
                     T("WHAT PEOPLE SAID", "สิ่งที่คนอื่นเล่า"),
@@ -1979,8 +2092,8 @@ public sealed partial class Hotel2DPrototype : Node2D
         ShowInvestigationScreen(
             T("CHOOSE A CLUE", "เลือกเบาะแส"),
             T(
-                "Choose the clue George will mention. Things seen directly are usually safer than second-hand stories.",
-                "เลือกเบาะแสที่จอร์จจะนำไปพูด สิ่งที่เห็นด้วยตัวเองมักน่าเชื่อถือกว่าเรื่องที่ได้ยินต่อมา"),
+                "Choose the clue [host] will mention. Things seen directly are usually safer than second-hand stories.",
+                "เลือกเบาะแสที่[host]จะนำไปพูด สิ่งที่เห็นด้วยตัวเองมักน่าเชื่อถือกว่าเรื่องที่ได้ยินต่อมา"),
             new Color("f1d18a"),
             choices);
     }
@@ -2005,7 +2118,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             .ToList();
         ShowInvestigationScreen(
             $"{T("CHOOSE A CLUE FOR", "เลือกเบาะแสเพื่อถาม")} {DisplayName(partner)}",
-            T("Choose what George should mention to this person.", "เลือกสิ่งที่จอร์จควรนำไปถามคนนี้"),
+            T("Choose what [host] should mention to this person.", "เลือกสิ่งที่[host]ควรนำไปถามคนนี้"),
             new Color(_characters[partner].Color),
             choices);
     }
@@ -2032,7 +2145,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         ShowInvestigationScreen(
             T("WHO DO YOU WANT TO QUESTION?", "ต้องการถามใคร?"),
             $"{T("Selected clue", "เบาะแสที่เลือก")}: {ShortEvidenceLabel(evidence)}\n" +
-            T("Choose someone currently in the same room as George.", "เลือกคนที่อยู่ห้องเดียวกับจอร์จตอนนี้"),
+            T("Choose someone currently in the same room as [host].", "เลือกคนที่อยู่ห้องเดียวกับ[host]ตอนนี้"),
             new Color("f1d18a"),
             choices);
     }
@@ -2052,15 +2165,111 @@ public sealed partial class Hotel2DPrototype : Node2D
         string body,
         Color accent,
         IReadOnlyList<InvestigationChoice>? choices = null,
-        bool allowClose = true)
+        bool allowClose = true,
+        EntityId? subject = null,
+        string? nameEntryPlaceholder = null,
+        string? nameEntryValue = null)
     {
         if (_simulation is null || _investigationOverlay is null)
         {
             return;
         }
 
-        _investigationOverlay.ShowScreen(title, body, accent, choices, allowClose);
+        // Every line the player reads passes through here, so the name they chose
+        // is substituted in one place rather than at fifty call sites.
+        InvestigationChoice[]? named = choices?
+            .Select(choice => choice with { Label = Personalize(choice.Label) })
+            .ToArray();
+        _investigationOverlay.SetSubjectlessCaption(
+            T("SUBJECT\nPROFILE", "แฟ้ม\nประวัติ"));
+        _investigationOverlay.ShowScreen(
+            Personalize(title),
+            Personalize(body),
+            accent,
+            named,
+            allowClose,
+            DescribeSubject(subject),
+            nameEntryPlaceholder,
+            nameEntryValue,
+            subject is null ? BuildNightStatus() : null);
     }
+
+    /// <summary>
+    /// What the rail carries on a screen that is not about a person.
+    /// </summary>
+    /// <remarks>
+    /// The column is 230 pixels of the panel and it used to hold an anonymous
+    /// silhouette captioned SUBJECT PROFILE on every screen that had no subject,
+    /// which is most of them. These are the five numbers a player checks a
+    /// case file to find out.
+    /// </remarks>
+    private IReadOnlyList<StatusLine>? BuildNightStatus()
+    {
+        if (_simulation is null || !_gameStarted || _gameEnded)
+        {
+            return null;
+        }
+
+        long remaining = Math.Max(0L, NightShiftDirector.DeadlineTick - _simulation.CurrentTick);
+        PlayerJournal journal = _simulation.GetPlayerJournal(_humanHost);
+        ExposureReport exposure = _simulation.GetExposure(_humanHost);
+        return
+        [
+            new StatusLine(
+                T("TIME LEFT", "เวลาที่เหลือ"),
+                T($"{remaining} min", $"{remaining} นาที"),
+                remaining <= 45 ? "e06c75" : null),
+            new StatusLine(
+                T("ON SHIFT", "ผู้เข้ากะ"),
+                HostName()),
+            new StatusLine(
+                T("CLUES", "เบาะแส"),
+                journal.Entries.Count.ToString(CultureInfo.InvariantCulture)),
+            new StatusLine(
+                T("STATEMENTS", "คำให้การ"),
+                _simulation.Claims.Count.ToString(CultureInfo.InvariantCulture)),
+            new StatusLine(
+                T("HOW YOU LOOK", "คนอื่นมองคุณยังไง"),
+                ExposureFormatter.FormatLevel(exposure.Level, _isThai),
+                ExposureColors[exposure.Level]),
+        ];
+    }
+
+    /// <summary>The portrait card for whoever a screen is about.</summary>
+    private PortraitSubject? DescribeSubject(EntityId? subject)
+    {
+        if (subject is not EntityId actor ||
+            !_characters.TryGetValue(actor, out CharacterDefinition? character))
+        {
+            return null;
+        }
+
+        return new PortraitSubject(
+            character.Id,
+            new Color(character.Color),
+            DisplayName(actor),
+            DisplayRole(character),
+            character.StationIn(_isThai));
+    }
+
+    /// <summary>
+    /// Puts the player's chosen name into text written with a placeholder.
+    /// </summary>
+    /// <remarks>
+    /// The narrative used to say George in fifty-two places, which is fine right
+    /// up until the player is asked what to call themselves.
+    /// </remarks>
+    private string Personalize(string text) =>
+        text.Contains("[host]", StringComparison.Ordinal)
+            ? text.Replace("[host]", HostName(), StringComparison.Ordinal)
+            : text;
+
+    private string HostName() => _hostName ?? DefaultHostName();
+
+    private string DefaultHostName() =>
+        _characters.TryGetValue(_humanHost, out CharacterDefinition? host)
+            ? host.NameIn(_isThai)
+            : _humanHost.Value;
 
     private void OnInvestigationOverlayClosed()
     {
@@ -2272,9 +2481,37 @@ public sealed partial class Hotel2DPrototype : Node2D
         // The player never got to make an accusation, so the case file cannot
         // close. What the night leaves behind is what they did when it was their
         // turn to be the suspect.
+        (string endingTitle, string endingBody) = choice == PlayerClimaxChoice.Flee
+            ? (T("THE DOOR BEHIND YOU", "ประตูข้างหลัง"),
+                T(
+                    "[host] goes through the garden door and does not look back. " +
+                        "Nobody follows; there is a shift to finish and a hotel to " +
+                        "keep open.\n\nThe case stays open with a name in it. " +
+                        "Whatever was moving through this building tonight is " +
+                        "still moving through it.",
+                    "[host] ออกทางประตูสวนโดยไม่หันกลับมามอง ไม่มีใครตามไป " +
+                        "เพราะยังมีกะที่ต้องทำให้จบ และโรงแรมที่ต้องเปิดต่อ\n\n" +
+                        "คดีถูกปิดค้างไว้พร้อมชื่อหนึ่งชื่อในนั้น " +
+                        "ส่วนสิ่งที่เคลื่อนไหวอยู่ในตึกนี้คืนนี้ ก็ยังเคลื่อนไหวอยู่"))
+            : (T("YOU TALKED YOUR WAY OUT", "คุณพูดจนรอดมาได้"),
+                T(
+                    "[host] takes their account apart in front of them: the times " +
+                        "that do not line up, the room two of them cannot both " +
+                        "have been in.\n\nThe group comes apart. They go back to " +
+                        "their posts less certain of each other than they were an " +
+                        "hour ago, which is its own kind of damage.",
+                    "[host] รื้อคำให้การของพวกเขาต่อหน้าทีละข้อ ทั้งเวลาที่ไม่ตรงกัน " +
+                        "และห้องที่สองคนอยู่พร้อมกันไม่ได้\n\n" +
+                        "กลุ่มนั้นแตกออกจากกัน ทุกคนกลับไปประจำที่ของตัวเอง " +
+                        "โดยไว้ใจกันน้อยลงกว่าเมื่อชั่วโมงก่อน ซึ่งก็เป็นความเสียหายอีกแบบหนึ่ง"));
+
+        // The simulation writes one English paragraph for each choice and asserts
+        // things about the world it is not allowed to know. What it is good for
+        // here is the outcome flag; the words belong to the client, like every
+        // other ending.
         ShowInvestigationScreen(
-            LocalizeText(resolution.Title),
-            LocalizeText(resolution.NarrativeText),
+            endingTitle,
+            endingBody,
             new Color(resolution.PlayerVindicated ? "77dd77" : "e06c75"),
             [
                 new InvestigationChoice(
@@ -2309,26 +2546,26 @@ public sealed partial class Hotel2DPrototype : Node2D
         string clue = DescribeMostRelevantClue(_simulation.GetPlayerJournal(_humanHost));
         string body = wasTrue
             ? T(
-                "George says it before they can. \"It's me. I'm the one you have " +
-                    "been looking for.\"\n\nNobody moves. He has been reading the " +
+                "[host] says it before they can. \"It's me. I'm the one you have " +
+                    "been looking for.\"\n\nNobody moves. They have been reading the " +
                     "night for hours and every line of it kept arriving back here:\n" +
                     clue + "\n\nThe hand that opened the basement door was on the " +
-                    "end of his own arm. He simply had not been the one deciding " +
+                    "end of their own arm. They simply had not been the one deciding " +
                     "when it moved.\n\nThey let him go. There is nothing in the " +
                     "ledger to hold a man for being steered.",
-                "จอร์จพูดออกไปก่อนที่พวกเขาจะทัน “ผมเอง ผมคือคนที่พวกคุณตามหา”\n\n" +
+                "[host]พูดออกไปก่อนที่พวกเขาจะทัน “ผมเอง ผมคือคนที่พวกคุณตามหา”\n\n" +
                     "ไม่มีใครขยับ เขาอ่านคืนนี้มาหลายชั่วโมง และทุกเส้นทางย้อนกลับมาที่เดิม:\n" +
                     clue + "\n\nมือที่เปิดประตูชั้นใต้ดินอยู่ปลายแขนของเขาเอง " +
                     "เพียงแต่เขาไม่ใช่คนที่ตัดสินใจว่ามันจะขยับเมื่อไร\n\n" +
                     "พวกเขาปล่อยเขาไป เพราะในบันทึกไม่มีข้อหาสำหรับคนที่ถูกบงการ")
             : T(
-                "George says it before they can. \"It's me. I'm the one you have " +
+                "[host] says it before they can. \"It's me. I'm the one you have " +
                     "been looking for.\"\n\nThey believe him. It is easier than " +
                     "what they had been thinking, and it ends the night.\n\n" +
                     "What he stopped looking at:\n" + clue + "\n\nSomewhere behind " +
                     "them a door that should be locked opens quietly. Whoever is " +
                     "really being steered watches him take it, and goes back to work.",
-                "จอร์จพูดออกไปก่อนที่พวกเขาจะทัน “ผมเอง ผมคือคนที่พวกคุณตามหา”\n\n" +
+                "[host]พูดออกไปก่อนที่พวกเขาจะทัน “ผมเอง ผมคือคนที่พวกคุณตามหา”\n\n" +
                     "พวกเขาเชื่อ เพราะมันง่ายกว่าสิ่งที่กำลังคิดกันอยู่ และมันทำให้คืนนี้จบลง\n\n" +
                     "สิ่งที่เขาเลิกมองไป:\n" + clue + "\n\nที่ไหนสักแห่งข้างหลังพวกเขา " +
                     "ประตูที่ควรถูกล็อกเปิดออกอย่างเงียบ ๆ คนที่ถูกบงการจริง ๆ " +
@@ -2438,12 +2675,48 @@ public sealed partial class Hotel2DPrototype : Node2D
                 "กะกลางคืนหนึ่งคืน โรงแรมหนึ่งแห่ง และหนึ่งคนที่ไม่ได้ทำตามเจตจำนงของตัวเอง\n\nตามหาผู้ควบคุมที่ซ่อนอยู่ก่อน 05:00 น."),
             new Color("f1d18a"),
             [
-                new InvestigationChoice(T("START NEW CASE", "เริ่มคดีใหม่"), ShowOnboarding),
+                new InvestigationChoice(T("START NEW CASE", "เริ่มคดีใหม่"), ShowNameEntry),
                 new InvestigationChoice(T("HOW TO PLAY", "วิธีเล่น"), ShowClueGuide),
                 new InvestigationChoice(T("SETTINGS", "ตั้งค่า"), ShowSettings),
                 new InvestigationChoice(T("EXIT GAME", "ออกจากเกม"), ExitGame),
             ],
             allowClose: false);
+    }
+
+    /// <summary>
+    /// Asks what to call the person the player is about to be.
+    /// </summary>
+    /// <remarks>
+    /// The character was called George in fifty-two written lines. A night where
+    /// the question is whether you are the one being steered lands differently
+    /// when the name on the badge is your own, so the narrative carries a
+    /// placeholder now and this is where it gets filled in.
+    /// </remarks>
+    private void ShowNameEntry()
+    {
+        ShowInvestigationScreen(
+            T("WHO IS ON TONIGHT?", "คืนนี้ใครเข้ากะ"),
+            T(
+                "The badge on the desk belongs to whoever is working the night " +
+                    "shift. Put your own name on it, or leave it as it was.",
+                "ป้ายชื่อที่เคาน์เตอร์เป็นของคนที่เข้ากะดึก " +
+                    "ใส่ชื่อคุณเองลงไป หรือจะใช้ชื่อเดิมก็ได้"),
+            new Color("f1d18a"),
+            [
+                new InvestigationChoice(T("TAKE THE SHIFT", "เข้ากะ"), ConfirmHostName),
+                new InvestigationChoice(T("BACK", "ย้อนกลับ"), ShowMainMenu),
+            ],
+            allowClose: false,
+            subject: _humanHost,
+            nameEntryPlaceholder: T("Name on the badge", "ชื่อบนป้าย"),
+            nameEntryValue: HostName());
+    }
+
+    private void ConfirmHostName()
+    {
+        // Left blank, the badge keeps the name it came with.
+        _hostName = _investigationOverlay?.NameEntryText;
+        ShowOnboarding();
     }
 
     private void ShowSettings()
@@ -2527,7 +2800,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             "3. COMPARE — open the Case File and check where each clue came from.\n" +
             "4. DECIDE — make an accusation only when the pattern makes sense.\n\n" +
             "Time moves while you investigate. The menu button pauses the shift.",
-            "คุณคือจอร์จ พนักงานต้อนรับกะกลางคืน ต้องหาให้พบว่าใครถูกควบคุมก่อน 05:00 น.\n\n" +
+            "คุณคือ[host] พนักงานต้อนรับกะกลางคืน ต้องหาให้พบว่าใครถูกควบคุมก่อน 05:00 น.\n\n" +
             "1. เดิน — คลิกห้องบนผังโรงแรม\n" +
             "2. สังเกต — คลิกคนเพื่อคุยหรือติดตาม และใช้ “สำรวจห้อง” เพื่อดูวัตถุ\n" +
             "3. เปรียบเทียบ — เปิดแฟ้มคดีแล้วดูที่มาของเบาะแส\n" +
@@ -2547,17 +2820,17 @@ public sealed partial class Hotel2DPrototype : Node2D
         string body = T(
             "THE JOURNAL USES THREE SIMPLE PARTS:\n\n" +
             "[23:15] Anna entered the basement\n" +
-            "George saw this himself  •  Very reliable\n\n" +
+            "[host] saw this himself  •  Very reliable\n\n" +
             "1. The clock tells you WHEN it happened.\n" +
             "2. The sentence tells you WHO did WHAT and WHERE.\n" +
-            "3. The last line says whether George saw it or heard it from someone.\n\n" +
+            "3. The last line says whether [host] saw it or heard it from someone.\n\n" +
             "A second-hand story can be wrong. Compare clues before accusing anyone.",
             "บันทึกใช้ข้อมูลเพียงสามส่วน:\n\n" +
             "[23:15] แอนนาเข้าไปในชั้นใต้ดิน\n" +
-            "จอร์จเห็นด้วยตัวเอง  •  น่าเชื่อถือมาก\n\n" +
+            "[host]เห็นด้วยตัวเอง  •  น่าเชื่อถือมาก\n\n" +
             "1. ตัวเลขในวงเล็บคือเวลาที่เกิดเหตุ\n" +
             "2. ประโยคบอกว่าใครทำอะไรและอยู่ที่ไหน\n" +
-            "3. บรรทัดล่างบอกว่าจอร์จเห็นเองหรือได้ยินจากใคร\n\n" +
+            "3. บรรทัดล่างบอกว่า[host]เห็นเองหรือได้ยินจากใคร\n\n" +
             "เรื่องที่ได้ยินต่อกันมาอาจผิดได้ ควรเปรียบเทียบหลายเบาะแสก่อนกล่าวหา");
 
         ShowInvestigationScreen(
@@ -2610,7 +2883,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             _insightButton.Text = InsightButtonText();
             _insightButton.TooltipText = T(
                 "Reveal each character's inferred current intention",
-                "แสดงเจตนาปัจจุบันที่จอร์จคาดเดาจากตัวละครแต่ละคน");
+                "แสดงเจตนาปัจจุบันที่[host]คาดเดาจากตัวละครแต่ละคน");
         }
     }
 
@@ -2741,37 +3014,37 @@ public sealed partial class Hotel2DPrototype : Node2D
         return ending switch
         {
             EndingKind.YouWereThePlayer => T(
-                "At 05:00, George says his own name. Nobody laughs.\n\n" +
-                    "He has been reading the night for hours and every line of it kept " +
-                    "arriving back at the same place. The clue he could not put down:\n" +
+                "At 05:00, [host] says his own name. Nobody laughs.\n\n" +
+                    "They have been reading the night for hours and every line of it kept " +
+                    "arriving back at the same place. The clue they could not put down:\n" +
                     clue + "\n\n" +
-                    "The hand that opened the basement door was on the end of his own arm. " +
-                    "He simply had not been the one deciding when it moved.",
-                "เวลา 05:00 จอร์จเอ่ยชื่อของตัวเอง ไม่มีใครหัวเราะ\n\n" +
+                    "The hand that opened the basement door was on the end of their own arm. " +
+                    "They simply had not been the one deciding when it moved.",
+                "เวลา 05:00 [host]เอ่ยชื่อของตัวเอง ไม่มีใครหัวเราะ\n\n" +
                     "เขาอ่านคืนนี้มาหลายชั่วโมง และทุกเส้นทางย้อนกลับมาที่เดิม " +
                     "เบาะแสที่เขาวางไม่ลง:\n" + clue + "\n\n" +
                     "มือที่เปิดประตูชั้นใต้ดินอยู่ปลายแขนของเขาเอง " +
                     "เพียงแต่เขาไม่ใช่คนที่ตัดสินใจว่ามันจะขยับเมื่อไร"),
 
             EndingKind.CorrectAccusation => T(
-                $"At 05:00, George says {who}'s name. The lobby goes still. {who} does not " +
+                $"At 05:00, [host] says {who}'s name. The lobby goes still. {who} does not " +
                     "argue; their answer arrives a beat too late, as if someone else is " +
-                    "choosing it.\n\nThe clue that stayed with George:\n" + clue + "\n\n" +
-                    "Then the basement door clicks open again — from George's side of the hotel.",
-                $"เวลา 05:00 จอร์จเอ่ยชื่อ {who} ล็อบบี้เงียบลงทันที {who} ไม่เถียง " +
+                    "choosing it.\n\nThe clue that stayed with [host]:\n" + clue + "\n\n" +
+                    "Then the basement door clicks open again — from [host]'s side of the hotel.",
+                $"เวลา 05:00 [host]เอ่ยชื่อ {who} ล็อบบี้เงียบลงทันที {who} ไม่เถียง " +
                     "แต่ตอบช้าราวกับมีใครอีกคนกำลังเลือกคำพูดแทน\n\n" +
-                    "เบาะแสที่จอร์จนึกถึง:\n" + clue + "\n\n" +
-                    "จากนั้นประตูชั้นใต้ดินก็ดังคลิกขึ้นอีกครั้ง จากฝั่งของจอร์จเอง"),
+                    "เบาะแสที่[host]นึกถึง:\n" + clue + "\n\n" +
+                    "จากนั้นประตูชั้นใต้ดินก็ดังคลิกขึ้นอีกครั้ง จากฝั่งของ[host]เอง"),
 
             _ => T(
-                $"At 05:00, George says {who}'s name. For a moment, everyone accepts it. " +
+                $"At 05:00, [host] says {who}'s name. For a moment, everyone accepts it. " +
                     "Then a new movement appears where no one should be.\n\n" +
-                    "The clue George overlooked:\n" + clue + "\n\n" +
+                    "The clue [host] overlooked:\n" + clue + "\n\n" +
                     "The person you accused is frightened — but the Player is still moving " +
                     "somewhere in the hotel.",
-                $"เวลา 05:00 จอร์จเอ่ยชื่อ {who} ชั่วขณะหนึ่งทุกคนเชื่อว่าคดีจบแล้ว " +
+                $"เวลา 05:00 [host]เอ่ยชื่อ {who} ชั่วขณะหนึ่งทุกคนเชื่อว่าคดีจบแล้ว " +
                     "แต่มีการเคลื่อนไหวใหม่เกิดขึ้นในที่ที่ไม่มีใครควรอยู่\n\n" +
-                    "เบาะแสที่จอร์จมองข้าม:\n" + clue + "\n\n" +
+                    "เบาะแสที่[host]มองข้าม:\n" + clue + "\n\n" +
                     "คนที่คุณกล่าวหากลัวจริง แต่ผู้ควบคุมยังเคลื่อนไหวอยู่ที่ใดที่หนึ่งในโรงแรม"),
         };
     }
@@ -2786,47 +3059,47 @@ public sealed partial class Hotel2DPrototype : Node2D
         (string body, string accent) = ending switch
         {
             EndingKind.YouWereThePlayer => (T(
-                "The shift ends. Nobody stops him, because there is nothing in the ledger " +
-                    "to stop him for.\n\nWhat the case leaves behind\n" +
-                    "• Every question he asked tonight was also a move somebody made.\n" +
-                    "• The hotel was building its case against him the whole time, and it " +
+                "The shift ends. Nobody stops them, because there is nothing in the ledger " +
+                    "to stop them for.\n\nWhat the case leaves behind\n" +
+                    "• Every question they asked tonight was also a move somebody made.\n" +
+                    "• The hotel was building its case against them the whole time, and it " +
                     "was right.\n" +
                     "• Knowing does not hand the controls back.\n\n" +
-                    "George goes home at dawn. Something else decides when he comes in tomorrow.",
+                    "[host] goes home at dawn. Something else decides when they come in tomorrow.",
                 "กะจบลง ไม่มีใครห้ามเขา เพราะในบันทึกไม่มีอะไรให้ห้าม\n\n" +
                     "สิ่งที่คดีนี้ทิ้งไว้\n" +
                     "• ทุกคำถามที่เขาถามคืนนี้ ก็เป็นการกระทำของใครบางคนเช่นกัน\n" +
                     "• โรงแรมสร้างคดีต่อเขามาตลอดทั้งคืน และมันคิดถูก\n" +
                     "• การรู้ความจริงไม่ได้แปลว่าได้การควบคุมคืนมา\n\n" +
-                    "จอร์จกลับบ้านตอนรุ่งเช้า แต่มีอย่างอื่นเป็นคนตัดสินว่าพรุ่งนี้เขาจะมากี่โมง"),
+                    "[host]กลับบ้านตอนรุ่งเช้า แต่มีอย่างอื่นเป็นคนตัดสินว่าพรุ่งนี้เขาจะมากี่โมง"),
                 "c9a0ff"),
 
             EndingKind.CorrectAccusation => (T(
                 $"The hotel records {who}'s movements, but they cannot explain the final " +
-                    "door. George realizes the truth: finding the controlled person did not " +
-                    "mean he was outside the game.\n\nWhat the case leaves behind\n" +
+                    "door. [host] realizes the truth: finding the controlled person did not " +
+                    "mean they were outside the game.\n\nWhat the case leaves behind\n" +
                     "• The Player can use ordinary routines as cover.\n" +
-                    "• George's own actions can become evidence for someone else.\n" +
+                    "• [host]'s own actions can become evidence for someone else.\n" +
                     "• The basement is no longer only a locked room.\n\n" +
                     "This night is closed. The hotel is not.",
                 $"บันทึกของโรงแรมยืนยันการเคลื่อนไหวของ {who} แต่ไม่อาจอธิบายประตูบานสุดท้ายได้ " +
-                    "จอร์จจึงเข้าใจว่า การหาคนที่ถูกควบคุมพบไม่ได้แปลว่าเขาอยู่นอกเกม\n\n" +
+                    "[host]จึงเข้าใจว่า การหาคนที่ถูกควบคุมพบไม่ได้แปลว่าเขาอยู่นอกเกม\n\n" +
                     "สิ่งที่คดีนี้ทิ้งไว้\n" +
                     "• ผู้ควบคุมใช้กิจวัตรธรรมดาเป็นฉากบังหน้าได้\n" +
-                    "• การกระทำของจอร์จเองอาจกลายเป็นหลักฐานให้คนอื่น\n" +
+                    "• การกระทำของ[host]เองอาจกลายเป็นหลักฐานให้คนอื่น\n" +
                     "• ชั้นใต้ดินไม่ใช่เพียงห้องที่ถูกล็อกอีกต่อไป\n\n" +
                     "คดีคืนนี้ปิดลงแล้ว แต่โรงแรมยังไม่จบ"),
                 "77dd77"),
 
             _ => (T(
-                $"Before dawn, {who} is allowed to leave. The staff will remember George's " +
+                $"Before dawn, {who} is allowed to leave. The staff will remember [host]'s " +
                     "certainty — and the damage it caused.\n\n" +
                     "What the case leaves behind\n" +
                     "• A convincing story is not the same as a direct observation.\n" +
                     "• A clue needs a source before it becomes an accusation.\n" +
                     "• The Player benefits whenever people stop comparing notes.\n\n" +
                     "The next night begins with less trust than the last.",
-                $"ก่อนรุ่งเช้า {who} ได้รับอนุญาตให้ออกไป พนักงานทุกคนจะจดจำความมั่นใจของจอร์จ " +
+                $"ก่อนรุ่งเช้า {who} ได้รับอนุญาตให้ออกไป พนักงานทุกคนจะจดจำความมั่นใจของ[host] " +
                     "และผลเสียที่ตามมา\n\n" +
                     "สิ่งที่คดีนี้ทิ้งไว้\n" +
                     "• เรื่องที่ฟังน่าเชื่อไม่เท่ากับสิ่งที่เห็นด้วยตา\n" +
@@ -2863,6 +3136,10 @@ public sealed partial class Hotel2DPrototype : Node2D
     // on an instance field. Without this both endings' buttons reloaded into the
     // title menu and "replay the night" was indistinguishable from "back to title".
     private static ulong? _replaySeed;
+
+    // Survives the scene reload that starts a new night, the same way the replay
+    // seed does: the player names themselves once, not once per case.
+    private static string? _hostName;
 
     private void RestartShift()
     {
@@ -2969,16 +3246,16 @@ public sealed partial class Hotel2DPrototype : Node2D
         {
             _inspectButton.Text = T("LOOK AROUND", "สำรวจห้อง");
             _inspectButton.TooltipText = T(
-                "See what George can inspect in this room",
-                "ดูสิ่งที่จอร์จตรวจสอบได้ในห้องนี้");
+                "See what [host] can inspect in this room",
+                "ดูสิ่งที่[host]ตรวจสอบได้ในห้องนี้");
         }
 
         if (_journalButton is not null)
         {
             _journalButton.Text = T("OPEN CASE FILE", "เปิดแฟ้มคดี");
             _journalButton.TooltipText = T(
-                "Review the clues George remembers",
-                "ทบทวนเบาะแสที่จอร์จจำได้");
+                "Review the clues [host] remembers",
+                "ทบทวนเบาะแสที่[host]จำได้");
         }
 
         if (_evidenceButton is not null)
@@ -3305,8 +3582,31 @@ public sealed partial class Hotel2DPrototype : Node2D
             .FirstOrDefault(actor => actor != _humanHost);
         IReadOnlyList<InteractiveObject> here = _simulation.GetPresentObjects();
         InteractiveObject? nearby = here.Count > 0 ? here[0] : null;
-        switch (_nightActionIndex % 3)
+        switch (_nightActionIndex % 4)
         {
+            // Asking one person about another is the channel the game actually
+            // provides for second-hand information, and the report never used
+            // it - which made "the player is told nothing" a fact about this
+            // walker rather than about the game.
+            case 3 when !partner.IsEmpty:
+                EntityId about = _characters.Keys.FirstOrDefault(
+                    other => other != _humanHost && other != partner);
+                if (about.IsEmpty)
+                {
+                    break;
+                }
+
+                DialogueOutcome gossip = _simulation.Talk(new DialogueRequest(
+                    DialogueActionKind.AskAboutSubject,
+                    _humanHost,
+                    partner,
+                    subject: about));
+                _nightReport.Action(
+                    tick,
+                    $"asks {DisplayName(partner)} about {DisplayName(about)} — " +
+                    (gossip.TransferredMemory is null ? "they had nothing" : "they passed something on"));
+                break;
+
             case 0 when !partner.IsEmpty:
                 DialogueOutcome asked = _simulation.Talk(new DialogueRequest(
                     DialogueActionKind.InquireSchedule,
@@ -3400,6 +3700,92 @@ public sealed partial class Hotel2DPrototype : Node2D
             .Select(group => $"{group.Key} x{group.Count()} ({group.Sum(r => r.Weight):F0})"));
     }
 
+    /// <summary>
+    /// Where the character the seed actually put behind the Player ranked in the
+    /// case file the player was reading, and what the file held on them next to
+    /// whoever outranked them.
+    /// </summary>
+    /// <remarks>
+    /// Uses the hidden truth, which nothing the player can see is allowed to do.
+    /// The night report is a development artefact and never reaches a build a
+    /// tester runs, but it is the only way to ask whether the ordinary evidence
+    /// points anywhere near the answer.
+    /// </remarks>
+    private string DescribeAnswerRank(PlayerJournal journal)
+    {
+        if (_truth is null)
+        {
+            return "unknown";
+        }
+
+        SuspicionSnapshot[] ranked =
+        [
+            .. journal.SuspicionSnapshots
+                .Where(snapshot => snapshot.Subject != _humanHost)
+                .OrderByDescending(TotalSuspicion),
+        ];
+        int index = Array.FindIndex(ranked, snapshot => snapshot.Subject == _truth.HiddenPlayer);
+        if (index < 0)
+        {
+            return $"nowhere - the file holds nothing at all on {_truth.HiddenPlayer.Value} " +
+                $"(it ranks {ranked.Length} other people)";
+        }
+
+        // The whole ranking, because the question is not only where the answer
+        // sits but whether anybody else is anywhere near it.
+        return $"{index + 1} of {ranked.Length}" +
+            string.Concat(ranked.Select(snapshot => System.Environment.NewLine +
+                $"  - {snapshot.Subject.Value}{(snapshot.Subject == _truth.HiddenPlayer ? " (the answer)" : string.Empty)}" +
+                $" {TotalSuspicion(snapshot):F0}: {DescribeEvidence(snapshot)}"));
+    }
+
+    /// <summary>
+    /// Whether the night's false leads ever reached the player.
+    /// </summary>
+    /// <remarks>
+    /// A secret can fail at three different points: never staged, staged but
+    /// never acted on, or acted on with nobody there to see it. The three
+    /// numbers say which, because guaranteeing more secrets did nothing when the
+    /// failure was the third one.
+    /// </remarks>
+    private string DescribeSecretReach(PlayerJournal journal)
+    {
+        if (_simulation is null || _truth is null)
+        {
+            return "unknown";
+        }
+
+        int acts = _simulation.Events.Count(worldEvent => worldEvent.Type is
+            EventType.Theft or EventType.SecretMeeting or EventType.NightActivity);
+        int learned = journal.Entries.Count(entry => entry.EventType is
+            EventType.Theft or EventType.SecretMeeting or EventType.NightActivity);
+        int shares = _simulation.Decisions.Count(
+            decision => decision.Goal.Type == GoalType.ShareSuspicion);
+        int sharesToYou = _simulation.Decisions.Count(
+            decision => decision.Goal.Type == GoalType.ShareSuspicion &&
+                decision.Goal.InteractionPartner == _humanHost);
+        int heard = journal.Entries.Count(entry => entry.InformationSource is not null);
+        return $"{_truth.Secrets.Count} / {acts} / {learned}" +
+            $"; share attempts {shares} ({sharesToYou} aimed at you)" +
+            $", clues you were told rather than saw {heard}";
+    }
+
+    private static float TotalSuspicion(SuspicionSnapshot snapshot) =>
+        snapshot.Vector.Criminality +
+        snapshot.Vector.Secrecy +
+        snapshot.Vector.RoleDeviation +
+        snapshot.Vector.MetaBehavior +
+        snapshot.Vector.ImpossibleBehavior +
+        snapshot.Vector.Deception;
+
+    private static string DescribeEvidence(SuspicionSnapshot snapshot) =>
+        snapshot.Evidence.Count == 0
+            ? "nothing"
+            : string.Join(", ", snapshot.Evidence
+                .GroupBy(evidence => evidence.Contribution.RuleId, StringComparer.Ordinal)
+                .OrderByDescending(group => group.Sum(evidence => evidence.EffectiveStrength))
+                .Select(group => $"{group.Key} x{group.Count()}"));
+
     private void WriteNightReport()
     {
         if (_nightReport is null || _simulation is null || _truth is null)
@@ -3423,6 +3809,8 @@ public sealed partial class Hotel2DPrototype : Node2D
             $"world events: {_simulation.Events.Count}",
             $"npc decisions: {_simulation.Decisions.Count} ({(_simulation.Decisions.Count == 0 ? 0 : idle * 100 / _simulation.Decisions.Count)}% idle)",
             "what the hotel has on you: " + DescribeExposureReasons(),
+            "where the answer sat in your own case file: " + DescribeAnswerRank(journal),
+            "secrets staged / acts they produced / acts you learned of: " + DescribeSecretReach(journal),
             "duty lapses recorded against you: " + _simulation.Events.Count(
                 worldEvent => worldEvent.Type == EventType.RoleDutyMissed &&
                     worldEvent.Actor == _humanHost),
@@ -3737,43 +4125,21 @@ public sealed partial class Hotel2DPrototype : Node2D
 
     private string DisplayName(EntityId actor)
     {
-        if (_isThai)
+        if (actor == _humanHost)
         {
-            return actor.Value.ToLowerInvariant() switch
-            {
-                "george" => "จอร์จ",
-                "anna" => "แอนนา",
-                "bob" => "บ็อบ",
-                "charlie" => "คลารา",
-                "dana" => "เอเลียส",
-                "evelyn" => "มิรา",
-                _ => actor.Value,
-            };
+            return HostName();
         }
 
+        // Names, jobs and posts live in the character catalogue in both languages
+        // now. They used to be a switch on the entity id in here, which meant the
+        // content file and the screen could disagree about who somebody was.
         return _characters.TryGetValue(actor, out CharacterDefinition? character)
-            ? character.DisplayName
+            ? character.NameIn(_isThai)
             : actor.Value;
     }
 
-    private string DisplayRole(CharacterDefinition character)
-    {
-        if (!_isThai)
-        {
-            return character.Role;
-        }
-
-        return character.Id.ToLowerInvariant() switch
-        {
-            "george" => "พนักงานต้อนรับ",
-            "anna" => "แม่บ้าน",
-            "bob" => "เจ้าหน้าที่รักษาความปลอดภัย",
-            "charlie" => "แขก",
-            "dana" => "พ่อครัว",
-            "evelyn" => "ผู้จัดการ",
-            _ => character.Role,
-        };
-    }
+    private string DisplayRole(CharacterDefinition character) =>
+        character.RoleIn(_isThai);
 
     private string ActivityText(EntityId actor)
     {
@@ -3792,27 +4158,15 @@ public sealed partial class Hotel2DPrototype : Node2D
 
     private string DisplayLocation(LocationId location) => DisplayLocation(location, _isThai);
 
-    private string DisplayLocation(LocationId location, bool useThai)
-    {
-        if (useThai)
-        {
-            return location.Value.ToLowerInvariant() switch
-            {
-                "lobby" => "ล็อบบี้โรงแรม",
-                "hallway" => "โถงทางเดินหลัก",
-                "kitchen" => "ห้องครัว",
-                "room-201" => "ห้อง 201",
-                "basement" => "ชั้นใต้ดิน",
-                "garden" => "สวนด้านนอก",
-                "security-room" => "ห้องกล้องวงจรปิด",
-                "office" => "ห้องผู้จัดการ",
-                _ => location.Value,
-            };
-        }
+    private string DisplayLocation(LocationId location, bool useThai) =>
+        FindLocation(location)?.LabelIn(useThai) ?? location.Value;
 
-        return _hotel?.Locations.SingleOrDefault(item => item.Id == location.Value)?.DisplayName ??
-            location.Value;
-    }
+    /// <summary>The room's name as it belongs in a sentence rather than on a map.</summary>
+    private string LocationInProse(LocationId location) =>
+        FindLocation(location)?.ProseIn(_isThai) ?? location.Value;
+
+    private HotelLocationDefinition? FindLocation(LocationId location) =>
+        _hotel?.Locations.SingleOrDefault(item => item.Id == location.Value);
 
     private string DisplayObject(InteractiveObject obj)
     {
@@ -3931,7 +4285,7 @@ public sealed partial class Hotel2DPrototype : Node2D
     };
 
     private string RoomTooltip(HotelLocationDefinition location) =>
-        $"{T("Move George to", "ย้ายจอร์จไปที่")} {DisplayLocation(new LocationId(location.Id))}";
+        $"{T("Move [host] to", "ย้าย[host]ไปที่")} {DisplayLocation(new LocationId(location.Id))}";
 
     private string MenuButtonText() => T("MENU", "เมนู");
 
@@ -3954,6 +4308,7 @@ public sealed partial class Hotel2DPrototype : Node2D
 
     private void RefreshStatus(string message)
     {
+        message = Personalize(message);
         if (_statusLabel is not null)
         {
             _statusLabel.Text = LocalizeText(message);
@@ -3963,6 +4318,9 @@ public sealed partial class Hotel2DPrototype : Node2D
     private const float PanelLeft = 895.0f;
     private const float PanelWidth = 340.0f;
     private const float PanelTop = 96.0f;
+
+    /// <summary>Where the action buttons begin, measured from the top.</summary>
+    private const float ActionButtonTop = 546.0f;
 
     private float _panelCursor = PanelTop;
 

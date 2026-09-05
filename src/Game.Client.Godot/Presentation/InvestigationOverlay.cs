@@ -4,6 +4,17 @@ namespace Game.Client.Godot.Presentation;
 
 public sealed record InvestigationChoice(string Label, Action Selected);
 
+/// <summary>Who the screen is about: the portrait and the card beneath it.</summary>
+/// <summary>One line on the rail when a screen is not about a person.</summary>
+public sealed record StatusLine(string Label, string Value, string? Accent = null);
+
+public sealed record PortraitSubject(
+    string CharacterId,
+    Color Accent,
+    string Name,
+    string Role,
+    string? Station);
+
 public sealed partial class InvestigationOverlay : Control
 {
     private Label? _title;
@@ -13,6 +24,9 @@ public sealed partial class InvestigationOverlay : Control
     private RichTextLabel? _body;
     private GridContainer? _choices;
     private Button? _close;
+    private LineEdit? _nameEntry;
+    private VBoxContainer? _status;
+    private Panel? _panel;
     private StyleBoxFlat? _panelStyle;
     private Tween? _transition;
     private bool _comfortableText;
@@ -43,6 +57,7 @@ public sealed partial class InvestigationOverlay : Control
             Position = new Vector2(70.0f, 115.0f),
             Size = new Vector2(1140.0f, 560.0f),
         };
+        _panel = panel;
         _panelStyle = new StyleBoxFlat
         {
             BgColor = new Color("171d2a"),
@@ -65,14 +80,17 @@ public sealed partial class InvestigationOverlay : Control
             Position = new Vector2(24.0f, 46.0f),
             Size = new Vector2(230.0f, 430.0f),
             MouseFilter = MouseFilterEnum.Ignore,
+            // The lighting streaks are drawn past the edge on purpose; without
+            // this they spill over the rounded corner of the panel behind.
+            ClipContents = true,
         };
         panel.AddChild(_portrait);
 
         _portraitText = new Label
         {
             Text = "SUBJECT\nPROFILE",
-            Position = new Vector2(18.0f, 365.0f),
-            Size = new Vector2(194.0f, 52.0f),
+            Position = new Vector2(14.0f, 350.0f),
+            Size = new Vector2(202.0f, 74.0f),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             MouseFilter = MouseFilterEnum.Ignore,
@@ -80,6 +98,19 @@ public sealed partial class InvestigationOverlay : Control
         _portraitText.AddThemeColorOverride("font_color", new Color("75829e"));
         _portraitText.AddThemeFontSizeOverride("font_size", 16);
         _portrait.AddChild(_portraitText);
+
+        // The rail is the same width whatever a screen is about, so the text
+        // column never moves. When there is nobody to show, it carries the state
+        // of the night rather than an empty silhouette captioned SUBJECT PROFILE.
+        _status = new VBoxContainer
+        {
+            Position = new Vector2(24.0f, 46.0f),
+            Size = new Vector2(230.0f, 430.0f),
+            Visible = false,
+            MouseFilter = MouseFilterEnum.Ignore,
+        };
+        _status.AddThemeConstantOverride("separation", 14);
+        panel.AddChild(_status);
 
         _title = new Label
         {
@@ -92,8 +123,8 @@ public sealed partial class InvestigationOverlay : Control
 
         _time = new Label
         {
-            Position = new Vector2(795.0f, 27.0f),
-            Size = new Vector2(205.0f, 34.0f),
+            Position = new Vector2(760.0f, 27.0f),
+            Size = new Vector2(215.0f, 34.0f),
             HorizontalAlignment = HorizontalAlignment.Right,
             MouseFilter = MouseFilterEnum.Ignore,
         };
@@ -124,6 +155,17 @@ public sealed partial class InvestigationOverlay : Control
         _choices.AddThemeConstantOverride("v_separation", 8);
         panel.AddChild(_choices);
 
+        _nameEntry = new LineEdit
+        {
+            Position = new Vector2(285.0f, 268.0f),
+            Size = new Vector2(420.0f, 44.0f),
+            MaxLength = 24,
+            Visible = false,
+            CaretBlink = true,
+        };
+        _nameEntry.AddThemeFontSizeOverride("font_size", 18);
+        panel.AddChild(_nameEntry);
+
         _close = new Button
         {
             Text = "CLOSE",
@@ -151,6 +193,65 @@ public sealed partial class InvestigationOverlay : Control
         }
     }
 
+    private void BuildStatusRail(IReadOnlyList<StatusLine>? status, Color accent)
+    {
+        if (_status is null || _portrait is null)
+        {
+            return;
+        }
+
+        foreach (Node child in _status.GetChildren())
+        {
+            child.QueueFree();
+        }
+
+        _status.Visible = status is { Count: > 0 };
+        _portrait.Visible = !_status.Visible;
+        if (!_status.Visible)
+        {
+            return;
+        }
+
+        foreach (StatusLine line in status!)
+        {
+            var caption = new Label
+            {
+                Text = line.Label,
+                MouseFilter = MouseFilterEnum.Ignore,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                CustomMinimumSize = new Vector2(214.0f, 0.0f),
+            };
+            caption.AddThemeFontSizeOverride("font_size", 12);
+            caption.AddThemeColorOverride("font_color", new Color("75829e"));
+            _status.AddChild(caption);
+
+            var value = new Label
+            {
+                Text = line.Value,
+                MouseFilter = MouseFilterEnum.Ignore,
+                AutowrapMode = TextServer.AutowrapMode.WordSmart,
+                CustomMinimumSize = new Vector2(214.0f, 0.0f),
+            };
+            value.AddThemeFontSizeOverride("font_size", 17);
+            value.AddThemeColorOverride(
+                "font_color",
+                line.Accent is null ? accent : new Color(line.Accent));
+            _status.AddChild(value);
+        }
+    }
+
+    /// <summary>What the player typed, trimmed, or null if they typed nothing.</summary>
+    public string? NameEntryText =>
+        string.IsNullOrWhiteSpace(_nameEntry?.Text) ? null : _nameEntry!.Text.Trim();
+
+    private string _subjectlessCaption = "SUBJECT\nPROFILE";
+
+    /// <summary>The caption under an empty portrait, in the player's language.</summary>
+    public void SetSubjectlessCaption(string caption)
+    {
+        _subjectlessCaption = caption;
+    }
+
     public void SetTimeText(string text)
     {
         if (_time is not null)
@@ -170,7 +271,11 @@ public sealed partial class InvestigationOverlay : Control
         string body,
         Color accent,
         IReadOnlyList<InvestigationChoice>? choices = null,
-        bool allowClose = true)
+        bool allowClose = true,
+        PortraitSubject? subject = null,
+        string? nameEntryPlaceholder = null,
+        string? nameEntryValue = null,
+        IReadOnlyList<StatusLine>? status = null)
     {
         if (_title is null || _body is null || _choices is null || _panelStyle is null)
         {
@@ -180,7 +285,42 @@ public sealed partial class InvestigationOverlay : Control
         _title.Text = title;
         _title.AddThemeColorOverride("font_color", accent);
         _panelStyle.BorderColor = accent.Darkened(0.15f);
-        _portrait?.SetAccent(accent);
+        if (subject is null)
+        {
+            _portrait?.ClearSubject();
+            _portrait?.SetAccent(accent);
+            if (_portraitText is not null)
+            {
+                _portraitText.Text = status is { Count: > 0 } ? string.Empty : _subjectlessCaption;
+                _portraitText.AddThemeColorOverride("font_color", new Color("75829e"));
+            }
+        }
+        else
+        {
+            _portrait?.SetSubject(subject.CharacterId, subject.Accent);
+            if (_portraitText is not null)
+            {
+                // Name, job, and where they are normally found. A player who has
+                // met six people in one night needs the second and third lines.
+                _portraitText.Text = string.IsNullOrWhiteSpace(subject.Station)
+                    ? $"{subject.Name}\n{subject.Role}"
+                    : $"{subject.Name}\n{subject.Role}\n{subject.Station}";
+                _portraitText.AddThemeColorOverride("font_color", subject.Accent);
+            }
+        }
+
+        if (_nameEntry is not null)
+        {
+            _nameEntry.Visible = nameEntryPlaceholder is not null;
+            if (nameEntryPlaceholder is not null)
+            {
+                _nameEntry.PlaceholderText = nameEntryPlaceholder;
+                _nameEntry.Text = nameEntryValue ?? string.Empty;
+                _nameEntry.GrabFocus();
+            }
+        }
+
+        BuildStatusRail(status, accent);
         _body.Text = body;
         ApplyLayout();
         if (_close is not null)
@@ -257,7 +397,7 @@ public sealed partial class InvestigationOverlay : Control
             return;
         }
 
-        _portrait.Visible = true;
+        _portrait.Visible = _status is not { Visible: true };
         _title.Position = new Vector2(ContentLeft, 24.0f);
         _title.Size = new Vector2(500.0f, 44.0f);
         _body.Position = new Vector2(ContentLeft, BodyTop);
@@ -283,10 +423,40 @@ public sealed partial class InvestigationOverlay : Control
             _body.Size = new Vector2(ContentWidth, measured);
         }
 
-        float choicesTop = BodyTop + measured + 22.0f;
-        if (Mathf.Abs(_choices.Position.Y - choicesTop) > 1.0f)
+        // The field belongs between what was asked and the buttons that answer
+        // it. Pinning it to a fixed y put it underneath them as soon as the body
+        // text was short.
+        float cursor = BodyTop + measured + 22.0f;
+        if (_nameEntry is { Visible: true })
         {
-            _choices.Position = new Vector2(ContentLeft, choicesTop);
+            if (Mathf.Abs(_nameEntry.Position.Y - cursor) > 1.0f)
+            {
+                _nameEntry.Position = new Vector2(ContentLeft, cursor);
+            }
+
+            cursor += _nameEntry.Size.Y + 22.0f;
+        }
+
+        if (Mathf.Abs(_choices.Position.Y - cursor) > 1.0f)
+        {
+            _choices.Position = new Vector2(ContentLeft, cursor);
+        }
+
+        // The panel used to be 560 tall whatever it held, so a four-button screen
+        // sat in a box with two hundred empty pixels under it.
+        if (_panel is not null)
+        {
+            float needed = Mathf.Max(
+                cursor + _choices.Size.Y + 28.0f,
+                _status is { Visible: true }
+                    ? _status.GetCombinedMinimumSize().Y + 92.0f
+                    : 500.0f);
+            float height = Mathf.Clamp(needed, 320.0f, 566.0f);
+            if (Mathf.Abs(_panel.Size.Y - height) > 1.0f)
+            {
+                _panel.Size = new Vector2(_panel.Size.X, height);
+                _panel.Position = new Vector2(_panel.Position.X, (720.0f - height) / 2.0f);
+            }
         }
     }
 

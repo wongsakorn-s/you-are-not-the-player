@@ -27,7 +27,20 @@ public sealed class SecretBehaviorSystem : INpcRoutineDecisionObserver
     private readonly WorldEventFactory _events;
     private readonly IWorldEventBuffer _eventBuffer;
     private readonly SecretPlanRepository _plans;
-    private readonly HashSet<OccurrenceKey> _completedOccurrences = [];
+    /// <summary>
+    /// How often a secret in progress gives an onlooker something to catch.
+    /// </summary>
+    /// <remarks>
+    /// A secret used to produce exactly one event per night: one room, one
+    /// minute. If nobody happened to be standing there it left no trace at all,
+    /// so on most nights the case file could rank one or two people in the whole
+    /// hotel and the hidden player - who acts in bursts from dusk to dawn - was
+    /// always at the top of it. Somebody spending three quarters of an hour
+    /// where they have no business being gives a passer-by more than one chance.
+    /// </remarks>
+    public const long BeatTicks = 12;
+
+    private readonly Dictionary<OccurrenceKey, long> _lastBeat = [];
 
     public SecretBehaviorSystem(
         SimClock clock,
@@ -82,10 +95,13 @@ public sealed class SecretBehaviorSystem : INpcRoutineDecisionObserver
         }
 
         var occurrence = new OccurrenceKey(plan.Id, GetOccurrenceDay(plan));
-        if (!_completedOccurrences.Add(occurrence))
+        if (_lastBeat.TryGetValue(occurrence, out long last) &&
+            _clock.Now.Tick - last < BeatTicks)
         {
             return;
         }
+
+        _lastBeat[occurrence] = _clock.Now.Tick;
 
         EventTag[] tags = GetTags(plan);
         EntityId? target = plan.Participants.Count > 1 ? plan.Participants[1] : null;

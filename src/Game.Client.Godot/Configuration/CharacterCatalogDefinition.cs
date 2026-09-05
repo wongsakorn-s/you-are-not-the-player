@@ -17,7 +17,28 @@ public sealed record CharacterDefinition(
     string Role,
     string Description,
     string Color,
-    string PortraitKey);
+    string PortraitKey,
+    string? DisplayNameThai = null,
+    string? RoleThai = null,
+    string? DescriptionThai = null,
+    string? Station = null,
+    string? StationThai = null)
+{
+    /// <summary>The name to show, in the language being read.</summary>
+    public string NameIn(bool thai) =>
+        thai && !string.IsNullOrWhiteSpace(DisplayNameThai) ? DisplayNameThai : DisplayName;
+
+    /// <summary>The job title, in the language being read.</summary>
+    public string RoleIn(bool thai) =>
+        thai && !string.IsNullOrWhiteSpace(RoleThai) ? RoleThai : Role;
+
+    public string DescriptionIn(bool thai) =>
+        thai && !string.IsNullOrWhiteSpace(DescriptionThai) ? DescriptionThai : Description;
+
+    /// <summary>Where this person is normally found, in the language being read.</summary>
+    public string? StationIn(bool thai) =>
+        thai && !string.IsNullOrWhiteSpace(StationThai) ? StationThai : Station;
+}
 
 public static class CharacterCatalogDefinitionParser
 {

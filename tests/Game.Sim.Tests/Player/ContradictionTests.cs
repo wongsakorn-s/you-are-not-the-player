@@ -153,12 +153,7 @@ public sealed class ContradictionTests
         _ = session.PlayerController.RequestMove(Basement);
         Advance(session, 6);
         _ = session.RequestNpcMove(BasementScenario.Bob, Basement);
-        Advance(session, 6);
-
-        MemoryRecord? sighting = session.GetMemories(George).FirstOrDefault(memory =>
-            memory.Kind == MemoryKind.Episodic &&
-            memory.Subject == BasementScenario.Bob &&
-            memory.Location == Basement);
+        MemoryRecord? sighting = WaitToSee(session, BasementScenario.Bob, Basement);
         Assert.NotNull(sighting);
 
         DialogueOutcome asked = session.Talk(new DialogueRequest(
@@ -184,7 +179,8 @@ public sealed class ContradictionTests
         _ = session.PlayerController.RequestMove(Basement);
         Advance(session, 6);
         _ = session.RequestNpcMove(BasementScenario.Bob, Basement);
-        Advance(session, 6);
+        MemoryRecord? seen = WaitToSee(session, BasementScenario.Bob, Basement);
+        Assert.NotNull(seen);
 
         // Ask first so the claim is on the record, then challenge it with a clue
         // that agrees with it. Nothing they said is broken, so the challenge is
@@ -195,10 +191,7 @@ public sealed class ContradictionTests
             BasementScenario.Bob));
         Assert.NotNull(asked.Claim);
 
-        MemoryRecord? sighting = session.GetMemories(George).FirstOrDefault(memory =>
-            memory.Subject == BasementScenario.Bob &&
-            memory.Location == Basement);
-        Assert.NotNull(sighting);
+        MemoryRecord sighting = seen;
 
         ExposureReport before = session.GetExposure(George);
         DialogueOutcome confronted = session.Talk(new DialogueRequest(
@@ -249,6 +242,37 @@ public sealed class ContradictionTests
             sourceMemoryId: null,
             behaviorPattern: null);
 
+    /// <summary>
+    /// Advances until George has seen the actor in the given room, and no further.
+    /// </summary>
+    /// <remarks>
+    /// A claim can only be caught while the person is still standing where they
+    /// should not be: the check holds a speaker to the last room they remember
+    /// entering, so once they walk back to their post their account is true
+    /// again. The cast has a night of its own to get on with now, so waiting a
+    /// fixed six minutes after the sighting means asking an empty room.
+    /// </remarks>
+    private static MemoryRecord? WaitToSee(
+        BasementScenarioSession session,
+        EntityId actor,
+        LocationId location)
+    {
+        for (int tick = 0; tick < 12; tick++)
+        {
+            Advance(session, 1);
+            MemoryRecord? seen = session.GetMemories(George).FirstOrDefault(memory =>
+                memory.Kind == MemoryKind.Episodic &&
+                memory.Subject == actor &&
+                memory.Location == location);
+            if (seen is not null)
+            {
+                return seen;
+            }
+        }
+
+        return null;
+    }
+
     private static void Advance(BasementScenarioSession session, int ticks)
     {
         for (int index = 0; index < ticks && !session.IsComplete; index++)
@@ -265,10 +289,15 @@ public sealed class ContradictionTests
                 "Data",
                 "SuspicionRules",
                 "mvp.json")));
+        // The host is the one being steered, which is a real kind of night and,
+        // for these tests, a quiet one: the Player AI does not drive a character
+        // the human is already driving, so nobody is walking the building to a
+        // plan of their own. What is under test here is what happens when a
+        // question is put to somebody, not how well it survives a busy hotel.
         var truth = new SessionTruth(
             seed: 481_516,
             humanHost: George,
-            hiddenPlayer: BasementScenario.Charlie,
+            hiddenPlayer: George,
             hiddenPlayerArchetype: PlayerAiArchetype.Explorer,
             incidentCulprit: George);
         return new BasementScenario(rules).CreateSession(

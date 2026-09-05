@@ -17,7 +17,13 @@ public static class ExposureFormatter
     public static string FormatBadge(ExposureReport report, bool useThai)
     {
         ArgumentNullException.ThrowIfNull(report);
-        return report.Level switch
+        return FormatLevel(report.Level, useThai);
+    }
+
+    /// <summary>The name of a tier, for places that hold a level and not a report.</summary>
+    public static string FormatLevel(ExposureLevel level, bool useThai)
+    {
+        return level switch
         {
             ExposureLevel.Cornered => useThai ? "จนมุม" : "CORNERED",
             ExposureLevel.Watched => useThai ? "ถูกจับตา" : "WATCHED",

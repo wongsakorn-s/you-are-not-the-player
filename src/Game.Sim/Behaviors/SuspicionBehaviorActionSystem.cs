@@ -1,6 +1,7 @@
 using Game.Sim.Brain;
 using Game.Sim.Entities;
 using Game.Sim.Events;
+using Game.Sim.Locations;
 using Game.Sim.Memory;
 using Game.Sim.Routines;
 using Game.Sim.Suspicion;
@@ -57,9 +58,18 @@ public sealed class SuspicionBehaviorActionSystem : INpcRoutineDecisionObserver
         }
 
         if (decision.Goal.Target is not EntityId subject ||
-            decision.Goal.InteractionPartner is not EntityId partner ||
-            _world.GetEntity(decision.Entity).LogicalLocation != decision.Goal.Destination ||
-            _world.GetEntity(partner).LogicalLocation != decision.Goal.Destination)
+            decision.Goal.InteractionPartner is not EntityId partner)
+        {
+            return;
+        }
+
+        // Being together is the requirement; being together in the room the goal
+        // predicted is not. The destination is the contact's last known location,
+        // which is stale the moment they walk out of it - and the player walks
+        // constantly, so in a measured night the cast made 221 attempts to pass
+        // something on and the player was told nothing at all.
+        LocationId speaker = _world.GetEntity(decision.Entity).LogicalLocation;
+        if (speaker.IsEmpty || _world.GetEntity(partner).LogicalLocation != speaker)
         {
             return;
         }

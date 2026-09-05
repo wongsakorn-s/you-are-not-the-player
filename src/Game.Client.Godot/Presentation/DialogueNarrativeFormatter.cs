@@ -31,7 +31,12 @@ public sealed class DialogueNarrativeFormatter
 
         if (!outcome.Succeeded)
         {
-            return outcome.FailureReason ?? "The conversation could not continue.";
+            // The simulation's reasons are diagnostics - "Cannot speak with bob;
+            // not in the same location" names an entity id and a code path. What
+            // the player needs is what happened in the room.
+            return useThai
+                ? "คุณคุยกับเขาตอนนี้ไม่ได้ ต้องอยู่ห้องเดียวกันก่อน"
+                : "There is no one here to say that to.";
         }
 
         DialogueCharacterLines lines = _catalog.GetLines(partner.Value);

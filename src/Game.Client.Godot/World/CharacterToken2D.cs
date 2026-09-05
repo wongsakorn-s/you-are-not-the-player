@@ -74,6 +74,7 @@ public sealed partial class CharacterToken2D : Control
         _activityLabel.AddThemeColorOverride("font_color", new Color("f1d18a"));
         _activityLabel.AddThemeFontSizeOverride("font_size", 10);
         AddChild(_activityLabel);
+        BuildInitial(displayName);
         QueueRedraw();
     }
 
@@ -91,6 +92,32 @@ public sealed partial class CharacterToken2D : Control
 
         DrawCircle(new Vector2(15.0f, 15.0f), 11.0f, new Color("111827"));
         DrawCircle(new Vector2(15.0f, 15.0f), 8.0f, _color);
+    }
+
+    /// <summary>
+    /// The first letter of the name, inside the dot.
+    /// </summary>
+    /// <remarks>
+    /// Six people in the lobby were six coloured circles. Full labels on all of
+    /// them land on top of each other at this scale, so the initial rides inside
+    /// the token and the room roster in the side panel carries the names and
+    /// jobs in full.
+    /// </remarks>
+    private void BuildInitial(string displayName)
+    {
+        _initial = new Label
+        {
+            Text = displayName[..1].ToUpperInvariant(),
+            Position = new Vector2(0.0f, 0.0f),
+            Size = new Vector2(30.0f, 30.0f),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            MouseFilter = MouseFilterEnum.Ignore,
+            ZIndex = 1,
+        };
+        _initial.AddThemeFontSizeOverride("font_size", 11);
+        _initial.AddThemeColorOverride("font_color", new Color("05070b"));
+        AddChild(_initial);
     }
 
     public override void _GuiInput(InputEvent @event)
@@ -144,6 +171,8 @@ public sealed partial class CharacterToken2D : Control
 
     public void SetMovementPaused(bool isPaused) => IsMovementPaused = isPaused;
 
+    private Label? _initial;
+
     public void SetDisplayName(string displayName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
@@ -154,6 +183,11 @@ public sealed partial class CharacterToken2D : Control
             TooltipText = string.IsNullOrWhiteSpace(_activity)
                 ? displayName
                 : $"{displayName}\n{_activity}";
+        }
+
+        if (_initial is not null)
+        {
+            _initial.Text = displayName[..1].ToUpperInvariant();
         }
     }
 

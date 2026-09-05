@@ -116,8 +116,40 @@ public static class CaseGenerator
             assignments.Add(new SecretAssignment(owner, behavior, Pick(random, accomplices)));
         }
 
+        // A night with one person worth looking at is not a mystery. Chance alone
+        // left three nights in seven with nobody but the hidden player carrying
+        // any suspicion at all, which makes the top of the case file the answer
+        // by default rather than by deduction.
+        EntityId[] spare = [.. candidates
+            .Where(entity => assignments.All(secret => secret.Owner != entity))];
+        int index = 0;
+        while (assignments.Count < MinimumSecrets && index < spare.Length)
+        {
+            EntityId owner = spare[index];
+            index++;
+            SecretBehaviorKind behavior = Pick(random, SecretBehaviors);
+            EntityId[] accomplices = [.. candidates.Where(entity => entity != owner)];
+            assignments.Add(behavior == SecretBehaviorKind.SecretMeeting && accomplices.Length > 0
+                ? new SecretAssignment(owner, behavior, Pick(random, accomplices))
+                : new SecretAssignment(
+                    owner,
+                    behavior == SecretBehaviorKind.SecretMeeting
+                        ? SecretBehaviorKind.NightOwl
+                        : behavior));
+        }
+
         return assignments;
     }
+
+    /// <summary>
+    /// How many other people the night has to give the player to look at.
+    /// </summary>
+    /// <remarks>
+    /// Two is the smallest number that makes the case file an argument rather
+    /// than a label: one other name means the ranking has nothing to compare and
+    /// its top entry is correct by construction.
+    /// </remarks>
+    private const int MinimumSecrets = 2;
 
     private static List<AnomalyBeat> PickAnomalies(
         Pcg32SimRandom random,

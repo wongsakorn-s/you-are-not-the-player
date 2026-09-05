@@ -48,11 +48,18 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
             return [];
         }
 
+        // Blending in is part of the plan, not the absence of one.
+        if (state.Rest > 0)
+        {
+            state.Rest--;
+            return [];
+        }
+
         return state.Profile.Archetype switch
         {
             PlayerAiArchetype.Explorer => CreateExplorerGoal(state),
-            PlayerAiArchetype.Completionist => CreateCompletionistGoal(state),
-            PlayerAiArchetype.Roleplayer => [],
+            PlayerAiArchetype.Completionist or PlayerAiArchetype.Roleplayer =>
+                CreateCompletionistGoal(state),
             _ => throw new InvalidOperationException(
                 $"Unsupported Player AI archetype '{state.Profile.Archetype}'."),
         };
@@ -72,9 +79,8 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
                 CompleteExploration(state, decision);
                 break;
             case PlayerAiArchetype.Completionist:
-                CompleteInteraction(state, decision);
-                break;
             case PlayerAiArchetype.Roleplayer:
+                CompleteInteraction(state, decision);
                 break;
             default:
                 throw new InvalidOperationException(
@@ -86,7 +92,12 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
     {
         if (state.ExplorationIndex >= state.Profile.ExplorationObjectives.Count)
         {
-            return [];
+            if (!state.Profile.Repeats || state.Profile.ExplorationObjectives.Count == 0)
+            {
+                return [];
+            }
+
+            state.ExplorationIndex = 0;
         }
 
         ExplorationObjective objective = state.Profile.ExplorationObjectives[state.ExplorationIndex];
@@ -103,7 +114,12 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
     {
         if (state.CompletionIndex >= state.Profile.CompletionObjectives.Count)
         {
-            return [];
+            if (!state.Profile.Repeats || state.Profile.CompletionObjectives.Count == 0)
+            {
+                return [];
+            }
+
+            state.CompletionIndex = 0;
         }
 
         CompletionObjective objective = state.Profile.CompletionObjectives[state.CompletionIndex];
@@ -111,9 +127,9 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
             GoalType.CompleteInteraction,
             objective.Location,
             ArchetypeUtility,
-            [new UtilityReason("archetype:completionist", 0.0f)],
-            ignoresRolePermissions: false,
-            GetIntentId(PlayerAiArchetype.Completionist, objective.Id))];
+            [new UtilityReason($"archetype:{state.Profile.Archetype}", 0.0f)],
+            objective.IgnoresRolePermissions,
+            GetIntentId(state.Profile.Archetype, objective.Id))];
     }
 
     private void CompleteExploration(AgentState state, NpcRoutineDecision decision)
@@ -134,6 +150,7 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
             decision.Entity,
             objective.BoundaryId));
         state.ExplorationIndex++;
+        StartRestIfBurstFinished(state);
     }
 
     private void CompleteInteraction(AgentState state, NpcRoutineDecision decision)
@@ -145,7 +162,7 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
 
         CompletionObjective objective = state.Profile.CompletionObjectives[state.CompletionIndex];
         if (!Matches(decision, GoalType.CompleteInteraction, objective.Location,
-            GetIntentId(PlayerAiArchetype.Completionist, objective.Id)))
+            GetIntentId(state.Profile.Archetype, objective.Id)))
         {
             return;
         }
@@ -153,8 +170,26 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
         _ = _interactions.Execute(new InteractionCommand(
             decision.Entity,
             objective.InteractionKind,
-            objective.Id));
+            objective.InteractionId));
         state.CompletionIndex++;
+        StartRestIfBurstFinished(state);
+    }
+
+    private static void StartRestIfBurstFinished(AgentState state)
+    {
+        if (state.Profile.BurstSize <= 0)
+        {
+            return;
+        }
+
+        state.CompletedInBurst++;
+        if (state.CompletedInBurst < state.Profile.BurstSize)
+        {
+            return;
+        }
+
+        state.CompletedInBurst = 0;
+        state.Rest = state.Profile.RestDecisions;
     }
 
     private static bool Matches(
@@ -176,5 +211,9 @@ public sealed class PlayerAiDirector : INpcGoalSource, INpcRoutineDecisionObserv
         public int ExplorationIndex { get; set; }
 
         public int CompletionIndex { get; set; }
+
+        public int CompletedInBurst { get; set; }
+
+        public int Rest { get; set; }
     }
 }

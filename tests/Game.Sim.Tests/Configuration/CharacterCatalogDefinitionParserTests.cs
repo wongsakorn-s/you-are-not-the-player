@@ -13,7 +13,20 @@ public sealed class CharacterCatalogDefinitionParserTests
         Assert.Equal(6, catalog.Characters.Length);
         Assert.Equal("George", catalog.GetCharacter("george").DisplayName);
         Assert.Equal("Clara", catalog.GetCharacter("charlie").DisplayName);
-        Assert.Equal("Manager", catalog.GetCharacter("evelyn").Role);
+
+        // Every character is somebody in both languages: a name, a job, and a
+        // place they are normally found. Six strangers met in one night is a lot
+        // to hold, and the job titles used to live in a switch statement in the
+        // client where the content file could not see them.
+        foreach (CharacterDefinition character in catalog.Characters)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(character.DisplayNameThai));
+            Assert.False(string.IsNullOrWhiteSpace(character.RoleThai));
+            Assert.False(string.IsNullOrWhiteSpace(character.Station));
+            Assert.False(string.IsNullOrWhiteSpace(character.StationThai));
+            Assert.NotEqual(character.NameIn(thai: true), character.NameIn(thai: false));
+            Assert.Equal(character.Role, character.RoleIn(thai: false));
+        }
     }
 
     [Fact]

@@ -2,12 +2,13 @@ using Game.Sim.Brain;
 using Game.Sim.Entities;
 using Game.Sim.Locations;
 using Game.Sim.Memory;
+using Game.Sim.Routines;
 using Game.Sim.Suspicion;
 using Game.Sim.Time;
 
 namespace Game.Sim.Behaviors;
 
-public sealed class SuspicionDrivenGoalSource : INpcGoalSource
+public sealed class SuspicionDrivenGoalSource : INpcGoalSource, INpcRoutineDecisionObserver
 {
     private const float ObserveBaseUtility = 20.0f;
     private const float AskBaseUtility = 25.0f;
@@ -20,6 +21,8 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
     private readonly SimClock _clock;
     private readonly SuspicionBehaviorRepository _profiles;
     private readonly SuspicionBehaviorPolicy _policy;
+    private readonly Dictionary<EntityId, int> _attentionSpell = [];
+    private readonly Dictionary<EntityId, int> _attentionRest = [];
 
     public SuspicionDrivenGoalSource(
         SuspicionSystem suspicion,
@@ -54,7 +57,7 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
                 $"Safe location '{profile.SafeLocation}' is forbidden for '{profile.Entity}'.");
         }
 
-        ContactBelief? contact = FindKnownContact(profile);
+        ContactBelief[] contacts = FindKnownContacts(profile);
         var goals = new List<GoalCandidate>();
         foreach (SuspicionSnapshot snapshot in _suspicion.GetKnownSuspicions(
             context.Entity.Id,
@@ -67,10 +70,15 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
 
             if (targetLocation is LocationId knownTargetLocation)
             {
-                AddTargetGoals(goals, snapshot.Subject, knownTargetLocation, concern);
+                AddTargetGoals(
+                    goals,
+                    snapshot.Subject,
+                    knownTargetLocation,
+                    concern,
+                    mayAttend: !_attentionRest.TryGetValue(context.Entity.Id, out int rest) || rest <= 0);
             }
 
-            if (contact is not null)
+            foreach (ContactBelief contact in contacts)
             {
                 AddSocialGoals(
                     goals,
@@ -95,27 +103,78 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
         return goals;
     }
 
-    private ContactBelief? FindKnownContact(SuspicionBehaviorProfile profile)
+    /// <summary>
+    /// Counts how long somebody has been giving one person their attention, so
+    /// that it can end.
+    /// </summary>
+    public void Observe(NpcRoutineDecision decision)
     {
+        ArgumentNullException.ThrowIfNull(decision);
+        if (_attentionRest.TryGetValue(decision.Entity, out int rest) && rest > 0)
+        {
+            _attentionRest[decision.Entity] = rest - 1;
+        }
+
+        if (decision.Goal.Type is not (GoalType.FollowTarget or GoalType.ObserveTarget))
+        {
+            // Eases off rather than resetting. Requiring an unbroken run let a
+            // character watch somebody eleven decisions out of twelve all night
+            // and never once trip the limit, which is the behaviour this exists
+            // to stop.
+            if (_attentionSpell.TryGetValue(decision.Entity, out int cooling) && cooling > 0)
+            {
+                _attentionSpell[decision.Entity] = cooling - 1;
+            }
+
+            return;
+        }
+
+        int spell = _attentionSpell.TryGetValue(decision.Entity, out int current) ? current + 1 : 1;
+        if (spell < _policy.AttentionSpellDecisions)
+        {
+            _attentionSpell[decision.Entity] = spell;
+            return;
+        }
+
+        _attentionSpell[decision.Entity] = 0;
+        _attentionRest[decision.Entity] = _policy.AttentionRestDecisions;
+    }
+
+    /// <summary>
+    /// Everyone this character could pass something on to right now.
+    /// </summary>
+    /// <remarks>
+    /// This used to return the first contact whose whereabouts were known, so
+    /// each character spent the night confiding in exactly one other person. Only
+    /// the manager lists the receptionist first, so on any night the manager was
+    /// the one being steered - and therefore not in this roster at all - nobody
+    /// ever turned to the night porter. Measured over seven nights the cast made
+    /// two to three hundred attempts to pass something on and not one of them was
+    /// aimed at the player, which is why the case file was first-hand only.
+    /// </remarks>
+    private ContactBelief[] FindKnownContacts(SuspicionBehaviorProfile profile)
+    {
+        var known = new List<ContactBelief>();
         foreach (EntityId contact in profile.Contacts)
         {
             LocationId? location = _memories.GetLastKnownLocation(profile.Entity, contact);
             if (location is LocationId knownLocation)
             {
-                return new ContactBelief(contact, knownLocation);
+                known.Add(new ContactBelief(contact, knownLocation));
             }
         }
 
-        return null;
+        return [.. known];
     }
 
     private void AddTargetGoals(
         List<GoalCandidate> goals,
         EntityId subject,
         LocationId location,
-        float concern)
+        float concern,
+        bool mayAttend)
     {
-        if (concern >= _policy.ObserveThreshold)
+        if (mayAttend && concern >= _policy.ObserveThreshold)
         {
             goals.Add(CreateGoal(
                 GoalType.ObserveTarget,
@@ -126,7 +185,7 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
                 contact: null));
         }
 
-        if (concern >= _policy.FollowThreshold)
+        if (mayAttend && concern >= _policy.FollowThreshold)
         {
             goals.Add(CreateGoal(
                 GoalType.FollowTarget,

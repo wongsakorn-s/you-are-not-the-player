@@ -27,7 +27,7 @@ public sealed class SecretBehaviorSystemTests
     private static readonly LocationId Vault = new("vault");
 
     [Fact]
-    public void Routine_ExecutesEachSecretOnceAndKeepsFalsePositivesMultidimensional()
+    public void Routine_KeepsEachSecretCatchableAndFalsePositivesMultidimensional()
     {
         Scenario scenario = CreateScenario();
 
@@ -40,16 +40,26 @@ public sealed class SecretBehaviorSystemTests
                 EventType.Theft or EventType.SecretMeeting or EventType.NightActivity)
             .ToArray();
 
-        Assert.Equal(3, secretEvents.Length);
+        // Three secrets, three kinds, and each one catchable more than once
+        // while it is in progress: a single event per night meant a secret with
+        // nobody standing in the room left no trace at all.
         Assert.Equal(
-            [EventType.SecretMeeting, EventType.NightActivity, EventType.Theft],
-            secretEvents.Select(worldEvent => worldEvent.Type));
+            [EventType.Theft, EventType.SecretMeeting, EventType.NightActivity],
+            secretEvents.Select(worldEvent => worldEvent.Type).Distinct().Order());
         Assert.All(
             secretEvents,
             worldEvent => Assert.Equal(Vault, worldEvent.Location));
-        Assert.Equal(
-            ConspiratorB,
-            Assert.Single(secretEvents, worldEvent => worldEvent.Type == EventType.SecretMeeting).Target);
+        Assert.All(
+            secretEvents.Where(worldEvent => worldEvent.Type == EventType.SecretMeeting),
+            worldEvent => Assert.Equal(ConspiratorB, worldEvent.Target));
+
+        // Two ticks sixty minutes apart, and the cooldown is twelve, so every
+        // secret has had a second chance to be seen.
+        Assert.All(
+            secretEvents.GroupBy(worldEvent => worldEvent.Type),
+            group => Assert.True(
+                group.Count() > 1,
+                $"{group.Key} was only catchable once."));
 
         NpcRoutineDecision thiefDecision = Assert.Single(
             firstDecisions,
