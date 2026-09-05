@@ -66,6 +66,33 @@ public sealed class HiddenPlayerLeavesATrailTests
                 worldEvent.Actor == truth.HiddenPlayer);
     }
 
+    [Fact]
+    public void EveryNightGivesThePlayerSomebodyElseToLookAt()
+    {
+        // Measured over seven nights, chance alone left three of them with the
+        // hidden player as the only person in the hotel carrying any suspicion,
+        // which makes the top of the case file correct by construction rather
+        // than by deduction.
+        for (ulong seed = 0; seed < 60; seed++)
+        {
+            SessionTruth truth = CaseGenerator.Generate(
+                seed,
+                new CaseGenerationOptions(
+                    BasementScenario.George,
+                    Roster,
+                    shiftTicks: 360,
+                    pinnedIncidentCulprit: BasementScenario.George));
+
+            Assert.True(
+                truth.Secrets.Count >= 2,
+                $"Seed {seed} staged {truth.Secrets.Count} secrets.");
+            Assert.DoesNotContain(truth.Secrets, secret => secret.Owner == truth.HiddenPlayer);
+            Assert.Equal(
+                truth.Secrets.Count,
+                truth.Secrets.Select(secret => secret.Owner).Distinct().Count());
+        }
+    }
+
     private static BasementScenarioSession RunNight(
         PlayerAiArchetype archetype,
         out SessionTruth truth)

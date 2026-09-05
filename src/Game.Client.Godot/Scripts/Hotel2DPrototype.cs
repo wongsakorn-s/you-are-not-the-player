@@ -3708,14 +3708,39 @@ public sealed partial class Hotel2DPrototype : Node2D
                 $"(it ranks {ranked.Length} other people)";
         }
 
-        string line = $"{index + 1} of {ranked.Length} " +
-            $"(score {TotalSuspicion(ranked[index]):F0}, top is {ranked[0].Subject.Value} " +
-            $"at {TotalSuspicion(ranked[0]):F0})";
-        return line +
-            System.Environment.NewLine +
-            $"  - on the answer ({_truth.HiddenPlayer.Value}): {DescribeEvidence(ranked[index])}" +
-            System.Environment.NewLine +
-            $"  - on the top name ({ranked[0].Subject.Value}): {DescribeEvidence(ranked[0])}";
+        // The whole ranking, because the question is not only where the answer
+        // sits but whether anybody else is anywhere near it.
+        return $"{index + 1} of {ranked.Length}" +
+            string.Concat(ranked.Select(snapshot => System.Environment.NewLine +
+                $"  - {snapshot.Subject.Value}{(snapshot.Subject == _truth.HiddenPlayer ? " (the answer)" : string.Empty)}" +
+                $" {TotalSuspicion(snapshot):F0}: {DescribeEvidence(snapshot)}"));
+    }
+
+    /// <summary>
+    /// Whether the night's false leads ever reached the player.
+    /// </summary>
+    /// <remarks>
+    /// A secret can fail at three different points: never staged, staged but
+    /// never acted on, or acted on with nobody there to see it. The three
+    /// numbers say which, because guaranteeing more secrets did nothing when the
+    /// failure was the third one.
+    /// </remarks>
+    private string DescribeSecretReach(PlayerJournal journal)
+    {
+        if (_simulation is null || _truth is null)
+        {
+            return "unknown";
+        }
+
+        int acts = _simulation.Events.Count(worldEvent => worldEvent.Type is
+            EventType.Theft or EventType.SecretMeeting or EventType.NightActivity);
+        int learned = journal.Entries.Count(entry => entry.EventType is
+            EventType.Theft or EventType.SecretMeeting or EventType.NightActivity);
+        int shares = _simulation.Decisions.Count(
+            decision => decision.Goal.Type == GoalType.ShareSuspicion);
+        int heard = journal.Entries.Count(entry => entry.InformationSource is not null);
+        return $"{_truth.Secrets.Count} / {acts} / {learned}" +
+            $"; share attempts {shares}, clues you were told rather than saw {heard}";
     }
 
     private static float TotalSuspicion(SuspicionSnapshot snapshot) =>
@@ -3758,6 +3783,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             $"npc decisions: {_simulation.Decisions.Count} ({(_simulation.Decisions.Count == 0 ? 0 : idle * 100 / _simulation.Decisions.Count)}% idle)",
             "what the hotel has on you: " + DescribeExposureReasons(),
             "where the answer sat in your own case file: " + DescribeAnswerRank(journal),
+            "secrets staged / acts they produced / acts you learned of: " + DescribeSecretReach(journal),
             "duty lapses recorded against you: " + _simulation.Events.Count(
                 worldEvent => worldEvent.Type == EventType.RoleDutyMissed &&
                     worldEvent.Actor == _humanHost),
