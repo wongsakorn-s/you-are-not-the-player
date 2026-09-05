@@ -27,7 +27,10 @@
         "z": 5.0
       },
       "color": "29384f",
-      "restricted": false
+      "restricted": false,
+      "displayNameThai": "ล็อบบี้โรงแรม",
+      "proseName": "the lobby",
+      "proseNameThai": "ล็อบบี้"
     },
     {
       "id": "hallway",
@@ -48,7 +51,10 @@
         "z": 4.0
       },
       "color": "34465e",
-      "restricted": false
+      "restricted": false,
+      "displayNameThai": "โถงทางเดินหลัก",
+      "proseName": "the main hallway",
+      "proseNameThai": "โถงทางเดิน"
     },
     {
       "id": "kitchen",
@@ -69,7 +75,10 @@
         "z": 4.0
       },
       "color": "354f47",
-      "restricted": false
+      "restricted": false,
+      "displayNameThai": "ห้องครัว",
+      "proseName": "the kitchen",
+      "proseNameThai": "ห้องครัว"
     },
     {
       "id": "room-201",
@@ -90,11 +99,14 @@
         "z": 4.0
       },
       "color": "4a4058",
-      "restricted": false
+      "restricted": false,
+      "displayNameThai": "ห้อง 201",
+      "proseName": "room 201",
+      "proseNameThai": "ห้อง 201"
     },
     {
       "id": "basement",
-      "displayName": "RESTRICTED BASEMENT",
+      "displayName": "BASEMENT",
       "marker": {
         "x": 0.0,
         "y": 0.8,
@@ -111,7 +123,10 @@
         "z": 6.0
       },
       "color": "412f3f",
-      "restricted": true
+      "restricted": true,
+      "displayNameThai": "ชั้นใต้ดิน",
+      "proseName": "the basement",
+      "proseNameThai": "ชั้นใต้ดิน"
     },
     {
       "id": "garden",
@@ -132,11 +147,14 @@
         "z": 4.0
       },
       "color": "25442f",
-      "restricted": false
+      "restricted": false,
+      "displayNameThai": "สวนด้านนอก",
+      "proseName": "the garden",
+      "proseNameThai": "สวนด้านนอก"
     },
     {
       "id": "security-room",
-      "displayName": "SECURITY CCTV ROOM",
+      "displayName": "SECURITY ROOM",
       "marker": {
         "x": -5.0,
         "y": 0.8,
@@ -153,7 +171,10 @@
         "z": 4.0
       },
       "color": "2c2e42",
-      "restricted": true
+      "restricted": true,
+      "displayNameThai": "ห้องกล้องวงจรปิด",
+      "proseName": "the security room",
+      "proseNameThai": "ห้องกล้องวงจรปิด"
     },
     {
       "id": "office",
@@ -174,7 +195,10 @@
         "z": 4.0
       },
       "color": "42332c",
-      "restricted": false
+      "restricted": false,
+      "displayNameThai": "ห้องผู้จัดการ",
+      "proseName": "the manager's office",
+      "proseNameThai": "ห้องผู้จัดการ"
     }
   ],
   "portals": [

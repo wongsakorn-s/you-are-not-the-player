@@ -932,10 +932,10 @@ public sealed partial class Hotel2DPrototype : Node2D
             return;
         }
 
-        _nightReport?.Told(beat.Tick, T(beat.EnglishText, beat.ThaiText));
+        _nightReport?.Told(beat.Tick, BeatText(beat));
         _alertPanel.Visible = true;
         _alertLabel.Visible = true;
-        _alertLabel.Text = $"◆  {Personalize(T(beat.EnglishText, beat.ThaiText))}";
+        _alertLabel.Text = $"◆  {BeatText(beat)}";
         _alertHideTick = beat.Tick + 10;
         _shiftHistory.Insert(0, beat);
         if (_shiftHistory.Count > 4)
@@ -953,8 +953,34 @@ public sealed partial class Hotel2DPrototype : Node2D
             _ => new Color("d0a85b16"),
         };
         _atmosphereOverlay.Color = alertColor;
-        RefreshStatus(T(beat.EnglishText, beat.ThaiText));
+        RefreshStatus(BeatText(beat));
         RefreshEventFeed();
+    }
+
+    /// <summary>
+    /// A beat as the player reads it: their own name, the cast's names in the
+    /// language being read, and rooms called what the map calls them.
+    /// </summary>
+    private string BeatText(ShiftBeat beat)
+    {
+        string text = Personalize(T(beat.EnglishText, beat.ThaiText));
+        if (beat.ActorId is not null)
+        {
+            text = text.Replace(
+                "{actor}",
+                DisplayName(new EntityId(beat.ActorId)),
+                StringComparison.Ordinal);
+        }
+
+        if (beat.DestinationId is not null)
+        {
+            text = text.Replace(
+                "{room}",
+                LocationInProse(new LocationId(beat.DestinationId)),
+                StringComparison.Ordinal);
+        }
+
+        return text;
     }
 
     /// <summary>
@@ -3936,27 +3962,15 @@ public sealed partial class Hotel2DPrototype : Node2D
 
     private string DisplayLocation(LocationId location) => DisplayLocation(location, _isThai);
 
-    private string DisplayLocation(LocationId location, bool useThai)
-    {
-        if (useThai)
-        {
-            return location.Value.ToLowerInvariant() switch
-            {
-                "lobby" => "ล็อบบี้โรงแรม",
-                "hallway" => "โถงทางเดินหลัก",
-                "kitchen" => "ห้องครัว",
-                "room-201" => "ห้อง 201",
-                "basement" => "ชั้นใต้ดิน",
-                "garden" => "สวนด้านนอก",
-                "security-room" => "ห้องกล้องวงจรปิด",
-                "office" => "ห้องผู้จัดการ",
-                _ => location.Value,
-            };
-        }
+    private string DisplayLocation(LocationId location, bool useThai) =>
+        FindLocation(location)?.LabelIn(useThai) ?? location.Value;
 
-        return _hotel?.Locations.SingleOrDefault(item => item.Id == location.Value)?.DisplayName ??
-            location.Value;
-    }
+    /// <summary>The room's name as it belongs in a sentence rather than on a map.</summary>
+    private string LocationInProse(LocationId location) =>
+        FindLocation(location)?.ProseIn(_isThai) ?? location.Value;
+
+    private HotelLocationDefinition? FindLocation(LocationId location) =>
+        _hotel?.Locations.SingleOrDefault(item => item.Id == location.Value);
 
     private string DisplayObject(InteractiveObject obj)
     {

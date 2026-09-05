@@ -45,7 +45,26 @@ public sealed record HotelLocationDefinition(
     WorldPoint FloorPosition,
     WorldSize FloorSize,
     string Color,
-    bool Restricted);
+    bool Restricted,
+    string? DisplayNameThai = null,
+    string? ProseName = null,
+    string? ProseNameThai = null)
+{
+    /// <summary>The map label, in the language being read.</summary>
+    public string LabelIn(bool thai) =>
+        thai && !string.IsNullOrWhiteSpace(DisplayNameThai) ? DisplayNameThai : DisplayName;
+
+    /// <summary>
+    /// The room's name as it belongs in a sentence.
+    /// </summary>
+    /// <remarks>
+    /// Map labels are shouted - HOTEL LOBBY, MAIN HALLWAY - which is right on a
+    /// floor plan and wrong in "Clara is going to MAIN HALLWAY".
+    /// </remarks>
+    public string ProseIn(bool thai) => thai
+        ? !string.IsNullOrWhiteSpace(ProseNameThai) ? ProseNameThai : LabelIn(thai: true)
+        : !string.IsNullOrWhiteSpace(ProseName) ? ProseName : DisplayName;
+}
 
 public sealed record HotelPortalDefinition(
     string Id,
