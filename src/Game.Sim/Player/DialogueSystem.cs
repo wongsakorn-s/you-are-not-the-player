@@ -25,6 +25,7 @@ public sealed class DialogueSystem
     private readonly WorldEventFactory _events;
     private readonly IWorldEventBuffer _eventBuffer;
     private readonly HotelObjectRegistry _objects;
+    private readonly ClaimLedger _claims = new();
 
     public DialogueSystem(
         SimClock clock,
@@ -49,6 +50,8 @@ public sealed class DialogueSystem
         _eventBuffer = eventBuffer;
         _objects = objects ?? HotelObjectRegistry.CreateDefaultHotelObjects();
     }
+
+    public ClaimLedger Claims => _claims;
 
     public DialogueOutcome Execute(DialogueRequest request)
     {
@@ -185,12 +188,175 @@ public sealed class DialogueSystem
             GeneratedEvent: shareEvent);
     }
 
-    private static DialogueOutcome HandleInquireSchedule(DialogueRequest request)
+    private DialogueOutcome HandleInquireSchedule(DialogueRequest request)
     {
-        string text = $"{request.Partner.Value}: \"I'm on duty around the hotel right now.\"";
+        // The answer comes from the speaker's own memory rather than from world
+        // state, so a character can only account for what they actually noticed
+        // themselves - and can be caught out by someone who noticed more.
+        MemoryRecord? lastMove = _memories.GetStore(request.Partner).Memories
+            .Where(memory =>
+                memory.Kind == MemoryKind.Episodic &&
+                memory.Subject == request.Partner &&
+                memory.EventType == EventType.EnterLocation &&
+                memory.Location is { IsEmpty: false })
+            .OrderByDescending(memory => memory.EventTime.Tick)
+            .ThenByDescending(memory => memory.Id.Value)
+            .FirstOrDefault();
+
+        // Someone who has not moved all night still has an account to give: they
+        // were standing where they are standing. Falling back to that keeps every
+        // character challengeable instead of making stillness a free alibi.
+        LocationId actual = lastMove?.Location!.Value
+            ?? _world.GetEntity(request.Partner).LogicalLocation;
+        SimTime when = lastMove?.EventTime ?? _clock.Now;
+        LocationId stated = ChooseStatedLocation(request.Partner, actual);
+        AlibiClaim claim = _claims.Record(
+            request.Partner,
+            stated,
+            when,
+            _clock.Now);
+
         return new DialogueOutcome(
             Succeeded: true,
-            Text: text);
+            Text: $"{request.Partner.Value}: \"I was at {stated.Value} around then.\"",
+            Claim: claim);
+    }
+
+    /// <summary>
+    /// Nobody volunteers that they were somewhere they had no business being. A
+    /// character who was last in a restricted room names an ordinary room next to
+    /// it instead - which is exactly the kind of statement a witness can break.
+    /// </summary>
+    private LocationId ChooseStatedLocation(EntityId speaker, LocationId actual)
+    {
+        if (!_world.GetLocation(actual).IsRestricted)
+        {
+            return actual;
+        }
+
+        // Ordinal order, no RNG: the cover story has to be the same on every
+        // replay of the same seed.
+        LocationId? cover = _world.Locations
+            .Where(location => !location.IsRestricted && location.Id != actual)
+            .OrderBy(location => location.Id.Value, StringComparer.Ordinal)
+            .Select(location => (LocationId?)location.Id)
+            .FirstOrDefault();
+        return cover ?? actual;
+    }
+
+    /// <summary>
+    /// The player has put a clue against something the partner said about
+    /// themselves. Either the account breaks or the player does.
+    /// </summary>
+    private DialogueOutcome ResolveChallenge(
+        DialogueRequest request,
+        MemoryRecord evidence,
+        WorldEvent confrontEvent)
+    {
+        string locName = evidence.Location is { IsEmpty: false } loc ? loc.Value : "there";
+        if (!ContradictionFinder.ContradictsAnyClaim(
+                _claims.Claims,
+                evidence,
+                request.Partner,
+                out AlibiClaim? challenged) ||
+            challenged is null)
+        {
+            // Nothing they said is on the line, so this is just an awkward remark.
+            return new DialogueOutcome(
+                Succeeded: true,
+                Text: $"{request.Partner.Value}: \"I had a reason to be at {locName}. Ask me something real.\"",
+                GeneratedEvent: confrontEvent);
+        }
+
+        if (IsClaimFalse(challenged))
+        {
+            // Caught. The partner gives up the strongest thing they were holding
+            // back, which is the reward that makes talking worth doing twice.
+            MemoryRecord? conceded = ConcedeSomething(request);
+            _ = _suspicion.ProcessMemory(request.Requester, evidence);
+            return new DialogueOutcome(
+                Succeeded: true,
+                Text: $"{request.Partner.Value}: \"...Fine. I was not at {challenged.ClaimedLocation.Value}. " +
+                    "I did not want this written down anywhere.\"",
+                TransferredMemory: conceded,
+                GeneratedEvent: confrontEvent,
+                Confrontation: ConfrontationResult.Cracked);
+        }
+
+        // Their account held. Accusing someone of lying on the strength of a
+        // second-hand story is exactly the kind of thing that gets remembered
+        // about you - the world builds its case against the accuser instead.
+        WorldEvent backfire = _events.Create(
+            request.Requester,
+            EventType.Interaction,
+            _world.GetEntity(request.Requester).LogicalLocation,
+            request.Partner,
+            [EventTag.Visible, EventTag.Suspicious],
+            new InteractionPayload(InteractionKind.Dialogue, "false-accusation"));
+        _eventBuffer.Publish(backfire);
+
+        return new DialogueOutcome(
+            Succeeded: true,
+            Text: $"{request.Partner.Value}: \"I was at {challenged.ClaimedLocation.Value}, and other people saw me there. " +
+                "Where did you get that story?\"",
+            GeneratedEvent: backfire,
+            Confrontation: ConfrontationResult.Backfired);
+    }
+
+    /// <summary>
+    /// The most recent thing the partner knows that the player does not.
+    /// </summary>
+    private MemoryRecord? ConcedeSomething(DialogueRequest request)
+    {
+        MemoryStore requesterStore = _memories.GetStore(request.Requester);
+        MemoryRecord? withheld = _memories.GetStore(request.Partner).Memories
+            .Where(memory =>
+                memory.Subject is not null &&
+                memory.Subject != request.Requester &&
+                !requesterStore.KnowsRootEvent(memory.RootEventId))
+            .OrderByDescending(memory => memory.EventTime.Tick)
+            .ThenByDescending(memory => memory.Id.Value)
+            .FirstOrDefault();
+
+        return withheld is null
+            ? null
+            : _memories.ShareMemory(
+                request.Partner,
+                request.Requester,
+                withheld.Id,
+                _clock.Now,
+                TransmissionConfidence);
+    }
+
+    /// <summary>
+    /// Whether a claim is false, judged against what the speaker themselves
+    /// remembers. No hidden truth is consulted; the speaker is simply held to
+    /// their own recollection.
+    /// </summary>
+    private bool IsClaimFalse(AlibiClaim claim)
+    {
+        // Where the speaker actually stood at the moment in question: the last
+        // room they remember walking into at or before that time. Asking "did they
+        // move anywhere nearby" instead would call almost every claim a lie, since
+        // people move rooms all night.
+        MemoryRecord? whereTheyWere = _memories.GetStore(claim.Speaker).Memories
+            .Where(memory =>
+                memory.Kind == MemoryKind.Episodic &&
+                memory.Subject == claim.Speaker &&
+                memory.EventType == EventType.EnterLocation &&
+                memory.Location is { IsEmpty: false } &&
+                memory.EventTime.Tick <= claim.ClaimedTime.Tick)
+            .OrderByDescending(memory => memory.EventTime.Tick)
+            .ThenByDescending(memory => memory.Id.Value)
+            .FirstOrDefault();
+
+        // Mirrors the fallback in HandleInquireSchedule: a character with no
+        // recollection of moving is held to where they are standing. Without this
+        // the two halves disagree and a cover story generated from the current
+        // room could never be broken.
+        LocationId actual = whereTheyWere?.Location
+            ?? _world.GetEntity(claim.Speaker).LogicalLocation;
+        return !actual.IsEmpty && actual != claim.ClaimedLocation;
     }
 
     private DialogueOutcome HandleInquireAboutObject(DialogueRequest request, LocationId location)
@@ -283,12 +449,7 @@ public sealed class DialogueSystem
 
         if (evidence.Subject == request.Partner)
         {
-            string locName = evidence.Location is { IsEmpty: false } loc ? loc.Value : "there";
-            string responseText = $"{request.Partner.Value}: \"Look, I had a valid reason to be at {locName}! Don't go spreading wild accusations!\"";
-            return new DialogueOutcome(
-                Succeeded: true,
-                Text: responseText,
-                GeneratedEvent: confrontEvent);
+            return ResolveChallenge(request, evidence, confrontEvent);
         }
 
         // Shared rumor about third party

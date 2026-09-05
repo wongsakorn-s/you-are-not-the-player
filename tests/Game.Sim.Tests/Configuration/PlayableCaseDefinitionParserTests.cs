@@ -1,12 +1,13 @@
 using Game.Client.Godot.Configuration;
-using Game.Sim.PlayerAi;
+using Game.Sim.Cases;
+using Game.Sim.Entities;
 
 namespace Game.Sim.Tests.Configuration;
 
 public sealed class PlayableCaseDefinitionParserTests
 {
     [Fact]
-    public void ProductionCase_ReferencesKnownContentAndLocksFirstPlayableTruth()
+    public void ProductionCase_PinsOnlyWhatItsEndingProseDependsOn()
     {
         CharacterCatalogDefinition characters = CharacterCatalogDefinitionParser.Parse(
             File.ReadAllText(ContentPath("Characters", "characters.json")));
@@ -18,10 +19,38 @@ public sealed class PlayableCaseDefinitionParserTests
         playableCase.ValidateReferences(characters, hotel);
 
         Assert.Equal("george", playableCase.HumanHost);
-        Assert.Equal("charlie", playableCase.HiddenPlayer);
-        Assert.Equal("george", playableCase.IncidentCulprit);
-        Assert.Equal(PlayerAiArchetype.Explorer, playableCase.ParsedPlayerArchetype);
         Assert.Equal(481_516UL, playableCase.Seed);
+
+        // The culprit stays pinned because the aftermath text names who opened the
+        // basement door. Who is being steered, and how, is left to the seed so two
+        // runs of the same case ask different questions.
+        Assert.Equal("george", playableCase.IncidentCulprit);
+        Assert.Null(playableCase.HiddenPlayer);
+        Assert.Null(playableCase.ParsedPlayerArchetype);
+    }
+
+    [Fact]
+    public void ProductionCase_GeneratesAnAnswerableTruthFromItsSeed()
+    {
+        CharacterCatalogDefinition characters = CharacterCatalogDefinitionParser.Parse(
+            File.ReadAllText(ContentPath("Characters", "characters.json")));
+        PlayableCaseDefinition playableCase = PlayableCaseDefinitionParser.Parse(
+            File.ReadAllText(ContentPath("Cases", "first-playable-case.json")));
+        var host = new EntityId(playableCase.HumanHost);
+
+        SessionTruth truth = CaseGenerator.Generate(
+            playableCase.Seed,
+            new CaseGenerationOptions(
+                host,
+                characters.Characters.Select(character => new EntityId(character.Id)),
+                shiftTicks: 360,
+                pinnedIncidentCulprit: new EntityId(playableCase.IncidentCulprit!)));
+
+        Assert.Equal(new EntityId("george"), truth.IncidentCulprit);
+
+        // The accusation screen cannot name the host yet, so a case where the host
+        // is the hidden player would be unwinnable.
+        Assert.NotEqual(host, truth.HiddenPlayer);
     }
 
     [Fact]

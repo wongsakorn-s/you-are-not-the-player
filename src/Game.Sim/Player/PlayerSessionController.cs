@@ -188,6 +188,16 @@ public sealed class PlayerSessionController
         var entries = new List<PlayerJournalEntry>(store.Memories.Count);
         foreach (MemoryRecord memory in store.Memories.OrderByDescending(m => m.EventTime.Tick))
         {
+            // A case file is what you know about other people. The player remembers
+            // their own inspections too, and letting those in filled the journal
+            // with "you touched something", offered them as evidence to confront
+            // others with, and - because self-memories carry full confidence - made
+            // one of them the "most relevant clue" quoted back in the ending.
+            if (memory.Subject == _playerEntity)
+            {
+                continue;
+            }
+
             string summary = FormatMemorySummary(memory);
             entries.Add(new PlayerJournalEntry(
                 memory.Id,

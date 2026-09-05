@@ -1,31 +1,94 @@
 # System-First Development Plan — NPC Reality Deduction Game
 
-> เวอร์ชันเอกสาร: 0.7
-> วันที่: 2026-09-01
+> เวอร์ชันเอกสาร: 1.0
+> วันที่: 2026-09-04
 > เป้าหมาย: เปลี่ยน technical prototype ที่พิสูจน์ระบบ NPC / Event / Memory / Suspicion / Reality Anomalies / Conspiracy แล้ว ให้เป็น First Fun Playtest ผ่าน 2D Top-Down Systemic Mystery + Visual Novel Hybrid
 
 ---
 
 ## สถานะการพัฒนาปัจจุบัน
 
-Milestone 0 ถึง Phase 15 และ Post-MVP Milestones ทั้งหมดเสร็จสมบูรณ์แล้ว:
+Roadmap Phase 0–15 และ Post-MVP เขียนโค้ดครบแล้วทั้งหมด แต่การไล่ตรวจเมื่อ 2026-09-04 พบว่า **ระบบจำนวนหนึ่งเสร็จแล้วแต่ไม่เคยถูกต่อเข้าเกมที่เล่นได้จริง** — `SecretPlanRepository`, `SecretGoalSource`, `SecretBehaviorSystem`, `NeedGoalSource` ถูกสร้างเฉพาะใน test ส่วน `RealityAnomalySystem` กับ `ConspiracySystem` ถูกสร้างแต่ไม่มีอะไรกระตุ้น และตารางงานของ NPC ทุกคนเป็น `Idle` ตลอด 24 ชั่วโมง
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (รอเชื่อมเข้ากับ deterministic case generation), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 166/166 xUnit automated tests.
+บทเรียนคือ **“เขียนเสร็จ” ไม่เท่ากับ “ทำงานในเกม”** — เกณฑ์วัดที่ใช้ได้จริงคือมันผลิตเหตุการณ์ที่ผู้เล่นเห็นได้หรือไม่ สถานะด้านล่างจึงจัดกลุ่มตามสิ่งที่ทำงานจริงในเกม ไม่ใช่ตามลำดับ phase:
+
+### แกนจำลองและความสามารถในการทำซ้ำ
+
+ส่วนที่พิสูจน์แล้วว่าทำงานถูกต้องและรันซ้ำได้ด้วย seed เดียวกัน
+
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 285/285 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
-- **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
+- **Sim Clock ตรงกับนาฬิกาของเกม:** เดิม `SimClock.TimeOfDay` คิดว่า 1 tick = ¼ วินาที (240 ticks = 1 นาที) ขณะที่ HUD คิดว่า 1 tick = 1 นาที ตารางจึงค้างที่ 00:00 ทั้งคืน; เพิ่ม `startOfDay` กับ `ticksPerMinute` โดย session ส่ง 23:00 กับ 1 เมื่อมี `SessionTruth`.
+- **Deterministic Case Generation:** เพิ่ม `Game.Sim/Cases/` ประกอบด้วย `SessionTruth`, `CaseGenerator`, `CaseGenerationOptions`, `SecretAssignment` และ `AnomalyBeat`; seed เดียวกันได้ case เดิมเสมอ ส่วน seed ต่างกันเปลี่ยน Hidden Player, archetype, Incident Culprit, secrets และ anomaly schedule โดย content พินค่าใดไว้ก็ได้ (first playable case พินเฉพาะ `incidentCulprit` เพราะบทจบอ้างถึงโดยตรง); `BasementScenarioOptions.Truth` เป็น optional จึงไม่กระทบ fingerprint ของ 4 regression scenario เดิม.
 - **Save-Load Session Snapshot System:** ถ่ายทอดและกู้คืนสถานะโลกจำลองทั้งหมดผ่าน Pure JSON พร้อมฟังก์ชัน QuickSave (`F6`) / QuickLoad (`F7`) ใน Godot Client และ SimRunner CLI flags (`--save-snapshot` / `--load-snapshot`) โดยรับประกันความถูกต้อง 100% Deterministic Parity.
-- **Hotel Content & Encounters Expansion:** แผนที่โรงแรมขยายเป็น 8 ห้อง (*Lobby, Hallway, Kitchen, Room 201, Basement, Garden, Security Room, Manager Office*), ระบบวัตถุ Interactive Objects (เซฟ, สมุดทะเบียนแขก, สมุดบัญชีลับ, ตู้ไฟ, กุญแจ) พร้อมปุ่มสำรวจและงัดแงะ (`O`).
-- **Dialogue & Clue Inquiry Expansion:** ระบบสอบถามเบาะแสเฉพาะวัตถุ (`InquireAboutObject`) และการนำหลักฐานไปเผชิญหน้า (`ConfrontEvidence`) ผ่านปุ่ม **`Y`**.
+- **Multi-Scenario Headless Stress Testing Suite:** ชุดทดสอบ 4 Scenarios บน SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`) พร้อมระบบคำนวณ SHA-256 Event Fingerprint และ JSONL Traces.
 - **Reality Anomalies & Meta-Suspicion System (The Core Concept):** ตรวจจับความผิดปกติของมิติเวลา เช่น การโหลดเซฟ (SaveReload Déjà Vu) และการเคลื่อนที่ฉับพลัน (The Blink Fast Travel) เพื่อกระตุ้นค่าความสงสัยในมิติ `ImpossibleBehavior` และ `MetaBehavior` ต่อ The Player.
 - **NPC Collective Conspiracy & Climax Accusation System:** ระบบรวมกลุ่มพันธมิตร NPC (`AccusationCoalition`), การสะสมหลักฐานจนเกิดมติเอกฉันท์ (`ConsensusReached`), การเรียกประชุมชี้ตัวใน Lobby, และทางเลือกของผู้เล่นสู่ฉากจบ (`Z` Confess, `X` Deny, `C` Flee).
-- **Multi-Scenario Headless Stress Testing Suite:** ชุดทดสอบ 4 Scenarios บน SimRunner (`basement`, `rumor-cascade`, `deceptive-alibi`, `reality-breach`) พร้อมระบบคำนวณ SHA-256 Event Fingerprint และ JSONL Traces.
+
+### โลกที่มีอะไรให้สังเกต
+
+ระบบเหล่านี้เขียนเสร็จมานานแล้วแต่ **ไม่เคยถูกต่อเข้าเกมจริง** — ก่อนหน้านี้คืนหนึ่งผลิตเหตุการณ์ 13 ชิ้นโดย 60% ของการตัดสินใจคือ `Idle` ตอนนี้ ~158 ชิ้นและไม่มี `Idle` เลย
+
+- **Observable Normality (§0.10.1):** เดิม NPC ทุกคนมีตาราง `Idle` 24 ชั่วโมง จึงไม่มี “ปกติ” ให้เบี่ยงเบน; เพิ่ม `HotelNightRoutines` กำหนดตารางกะกลางคืนจริงตามบทบาท (พนักงานต้อนรับ/แม่บ้าน/รปภ./เชฟ/ผู้จัดการ/แขก) พร้อมสิทธิ์เข้าห้องตามบทบาท และ `RoleDutySystem` ที่ยิง `RoleDutyMissed` — ตัวผลิตที่ขาดหายทำให้ `RoleNeglect` ไม่เคยทำงาน. วัดผลต่อหนึ่งคืนเต็ม: decisions ที่เป็น Idle จาก 60% เหลือ 0%, `RoleDutyMissed` จาก 0 เป็น 9 และแฟ้มคดีมีเบาะแสจริง 18 ชิ้น.
+- **False Positive เกิดได้จริงแล้ว (§0.5):** ต่อ `SessionTruth.Secrets` เข้า `SecretPlanRepository` ผ่าน `HotelSecretStaging` — seed กำหนดว่าใครมีความลับแบบไหน ส่วนฉากโรงแรมกำหนดว่ามันเกิดที่ไหนเมื่อไร (แยกกันเพื่อให้ `SessionTruth` ยังใช้กับฉากอื่นได้); `SecretGoalSource` เข้า brain และ `SecretBehaviorSystem` เป็น observer. ผลคือ `Theft` กับ `NightActivity` **ยิงได้เป็นครั้งแรก** แปลว่าตอนนี้ NPC ธรรมดาที่มีความลับดูผิดปกติได้เท่า Player จริง — กฎ “แปลก = Player” ใช้ไม่ได้อีกต่อไป.
+- **ทุกคนตอบสนองต่อความสงสัยได้ (§0.8):** เดิมมีเพียง Anna กับ Bob ที่มี `SuspicionBehaviorProfile` และ Bob ไม่มีคนให้เล่าเลย; เพิ่ม `HotelSocialGraph` กำหนดว่าแต่ละบทบาทไว้ใจใครและหลบไปที่ไหน โดย test บังคับว่ากราฟต้อง strongly connected — จับได้ว่าร่างแรกของผมทำให้ฝั่งผู้บริหารเป็นวงปิด ข่าวเข้าได้แต่ออกไม่ได้. คืนหนึ่งที่ seed 481516 เกิดสายความสงสัยอิสระ 3 สาย จากกฎคนละแบบ: `witnessed_theft`, `witnessed_night_activity`, `detected_role_neglect`.
+- **Reality Anomalies เกิดขึ้นจริง (§0.6):** ต่อ `truth.AnomalySchedule` เข้าลูป simulation — เดิม `CaseGenerator` สร้างตารางไว้แล้วไม่มีใครอ่าน `RealityAnomalySystem` จึงไม่เคยยิง event ในเกมจริงเลย; เพิ่ม `TriggerDialogueResetAnomaly` ที่ขาดหายตาม enum. anomaly เกิดกับ Hidden Player เท่านั้น — ความไม่แน่นอนมาจากว่ามีใครอยู่ตรงนั้นไหมและข่าวที่ได้ยินต่อน่าเชื่อแค่ไหน ไม่ใช่จาก anomaly ปลอม; ถ้า host อยู่ในห้องขณะมันเกิด จะมี alert ขัดขึ้นมา.
+- **Needs ทำงานแล้ว (§14):** `NeedGoalSource` เข้า brain และ `HotelNeeds` ตั้งอัตราให้ความหิวมาถึงราว 02:30 และความล้าราว 04:00 ภายในกะเดียว — เพิ่ม**เหตุผลบริสุทธิ์อีกข้อที่คนจะออกจากที่ประจำ** ตอนตีสี่.
+- **Tuning Pass:** เกณฑ์ pattern ถูกเขียนไว้สมัย 1 tick = ¼ วินาที — `LootSweep` ต้องการ 10 วัตถุจากที่มีทั้งหมด 11 ชิ้น และ `RoleNeglect` มีหน้าต่าง 60 ชั่วโมง (ยาวกว่ากะที่มันอธิบาย 10 เท่า); เพิ่ม `HotelNightRoutines.PatternPolicy()` ที่ขนาดสมกับโรงแรมนี้.
+- **แก้ anomaly นับคะแนนสองเด้ง:** `AnomalyTags` ชุดเดียวถือทั้ง `Pattern` และ `Suspicious` ทำให้กฎ anomaly ทั้งสองข้อ (ซึ่งเป็นทางเลือกกัน) ยิงพร้อมกัน; แยก tag ตามชนิด anomaly และเพิ่ม `MaxBeliefWeight` จำกัดว่าความสงสัยดึง utility ได้แค่ไหน — เดิมคะแนนไม่มีเพดาน ทำให้ทั้งโรงแรมทิ้งงานไปไล่ตามคนเดียวทั้งคืน. fingerprint ของ `reality-breach` เปลี่ยนจากการแยก tag นี้โดยตั้งใจ.
+
+### ลูปการเล่น — สิ่งที่ทำให้ผู้เล่นต้องตัดสินใจ
+
+เดิมการสืบสวนไม่มีต้นทุน กลยุทธ์ที่ดีที่สุดคือ “ทำทุกอย่างให้ครบ” ซึ่งไม่ใช่การตัดสินใจ
+
+- **เล่นคืนแรกจริง (ก่อน Milestone 6):** เพิ่ม `--night-report` แล้วเดินครบคืนบน 15 seed
+ผลคือ **สองในสามเสาหลักไม่เคยทำงานในคืนปกติ** — exposure สูงสุด 0–14 จากเกณฑ์ 15 และคดี
+ที่โรงแรมมีต่อผู้เล่นสูงสุด 0–24 จากเกณฑ์ 90 ส่วนคืน "You Were The Player" กลับตรงข้าม:
+anomaly ครั้งเดียวดัน exposure ไป 60 และ coalition ไป 204–330 ทำให้ผู้เล่นถูกล้อมจับที่
+20–38% ของกะ **ฉากจบที่เพิ่งทำเสร็จจึงไปไม่ถึงเลย** รายละเอียดและข้อค้นพบที่เหลืออยู่ใน
+`playtest/first-night-findings.md`.
+- **ปรับบาลานซ์จากคืนที่เล่นจริง:** บันได exposure เป็น 12 / 70 / 130 (เดิม 15 / 40 / 80) —
+ขั้นล่างต่ำกว่าน้ำหนักของการทิ้งเคาน์เตอร์ (14.4) ซึ่งเดิมพลาดเกณฑ์ไปแค่ 0.6 และขั้นบนสูงกว่า
+anomaly หนึ่งครั้ง (60) ที่เดิมข้ามสองขั้นรวด; `roleNeglectCount` 3 → 2 ให้การทิ้งหน้าที่ไปสืบ
+มีราคาจริง; Closing Net ไม่ลงมือก่อน 60% ของกะ; แฟ้มคดีเลิกเขียนข้อสรุป
+("acting aware of being controlled") แล้วบอกสิ่งที่เห็นแทน; anomaly ที่เกิดกับผู้เล่นเองไม่ถูก
+ข้ามอีกต่อไป; และคำสารภาพในฉาก climax เลิกยืนยันว่า "คุณคือ Player" ทุกคืน — มันผิดใน 13 จาก
+15 คืน **ผลวัดซ้ำ: มิเตอร์ขึ้นบนจอ 14 จาก 15 คืน (เดิม 0), คืนของผู้เล่นเองถูกล้อมจับที่ 72%
+ของกะแทน 20–38% พร้อมเบาะแส 28–29 ชิ้นแทน 5–11 ชิ้น และฉากจบ You Were The Player
+ไปถึงได้แล้ว** โดย fingerprint ทั้งสี่ยังตรึงเท่าเดิม.
+- **ฉากจบ "You Were The Player" (Milestone 5):** เปิด `AllowHostAsHiddenPlayer` ในเกมจริง — ราวหนึ่งในหกคืน ตัวละครที่มนุษย์ขับคือคนที่ถูกบงการเสียเอง; หน้าสรุปคดีเพิ่มตัวเลือก “เอ่ยชื่อตัวเอง” และฉากจบแยกเป็นสามทางตาม `EndingKind` (`CorrectAccusation` / `FalseAccusation` / `YouWereThePlayer`). เมื่อ host เป็น hidden player **Player AI จะไม่ขับเขา** — นอกจากกันชนกับมนุษย์แล้ว ยังเป็นหัวใจของฉากนี้: พฤติกรรมแบบ Player ที่ทั้งโรงแรมตอบสนอง ต้องเป็นของมนุษย์เอง และ anomaly ก็เกิดกับ host ทำให้ Exposure กับ Closing Net มาบรรจบที่ผู้เล่นเอง โดยไม่ต้องสคริปต์เพิ่ม.
+- **Exposure — ผู้เล่นก็ถูกโลกสังเกต (§0.7 Deviation):** อ่าน suspicion pipeline กลับด้านโดยใช้ Human Host เป็น subject ผ่าน `ExposureReport` แล้วแสดงเป็นภาษาคน 4 ระดับ (`ยังไม่มีใครสนใจ → มีคนสังเกต → ถูกจับตา → จนมุม`) บน HUD, ข้างนาฬิกา, หน้า `คนอื่นมองคุณอย่างไร` ในแฟ้มคดี และ alert เมื่อระดับขยับขึ้น; มีราคาจริงคือคนที่จับได้จะตอบอย่างระมัดระวัง (Watched) และเลิกเล่าเรื่องคนอื่นให้ฟัง (Cornered) โดยคิดเป็นรายคน ไม่ใช่ค่ารวม จึงไม่ปิดทางเล่นทั้งหมด.
+- **Contradiction — จับโกหกได้:** การถามตารางงานทำให้ NPC ให้ `AlibiClaim` ที่ตรวจสอบได้ โดยคำตอบมาจากความทรงจำของเขาเอง และจะ**เลี่ยงพูดความจริงเมื่อความจริงคือห้องหวงห้าม** โดยกล่าวถึงห้องธรรมดาข้างเคียงแทน; `ContradictionFinder` เทียบคำให้การกับเบาะแสของผู้เล่น และการแย้งมีสองทาง: ถ้าคำให้การเท็จจะ `Cracked` และยอมบอกสิ่งที่เก็บไว้ แต่ถ้าคำให้การจริงจะ `Backfired` และ**เพิ่ม Exposure ของผู้กล่าวหาเอง** ทำให้เบาะแสที่เห็นเองกับที่ได้ยินต่อกันมามีน้ำหนักต่างกันจริง.
+- **The Closing Net — นาฬิกาที่มีรูปทรง:** ต่อ `ConspiracySystem` เข้า 2D client แล้ว — NPC รวมกลุ่มกันต่อ Human Host ตามหลักฐานที่เห็นจริง โดยประกาศเตือนทุกขั้น (`Forming → ConsensusReached → Confronting`) และมีตัวนับถอยหลัง 45 นาทีในเกมก่อนลงมือ เพื่อให้ผู้เล่น**เห็น**ตาข่ายกำลังปิด และยังเลือกกล่าวหาก่อนได้; ถ้าปล่อยจนตาข่ายปิด จะเข้าฉากชี้ตัวแทน โดยเหลือทางเลือก `สารภาพ / ปฏิเสธ / หนี`. เกณฑ์ติดอาวุธใช้ `CombinedSuspicionScore >= 90` ไม่ได้ผูกกับ `ExposureLevel` เพราะสองมาตรวัดนี้ตอบคนละคำถามกัน.
+- **Pacing:** ขยายกะจาก 3 นาทีจริงเป็น 9 นาที (`SecondsPerTick` 0.5 → 1.5) เพราะลูป `สืบ → ซ่อนตัว → สืบ` ต้องการหลายรอบจึงจะอ่านเป็นจังหวะได้.
+- **Player Agency & Human Interaction Loop:** ระบบเข้าสิงตัวละคร (`P`), สั่งเดินนำทาง (`1-8`), สนทนาถามไถ่และแลกเปลี่ยนข่าวลือ (`T`), สมุดบันทึกประวัติความจำและข้อสงสัย Player Journal (`J`).
+- **Dialogue & Clue Inquiry Expansion:** ระบบสอบถามเบาะแสเฉพาะวัตถุ (`InquireAboutObject`) และการนำหลักฐานไปเผชิญหน้า (`ConfrontEvidence`) ผ่านปุ่ม **`Y`**.
+- **Case File Is About Other People:** `GetJournal` เคยใส่ความทรงจำทุกชิ้นรวมถึงการกระทำของผู้เล่นเอง ทำให้แฟ้มคดีเต็มไปด้วย “จอร์จแตะหรือตรวจบางอย่าง”, เสนอสิ่งเหล่านี้เป็นหลักฐานไปยันหน้าคนอื่น และ—เพราะ self-memory มี confidence เต็ม—กลายเป็น “เบาะแสที่เด่นที่สุด” ที่ถูกอ้างในฉากจบ.
+- **Inspect ≠ Tamper:** แก้ `ObjectActionHandler.Inspect` ที่ติด tag `Suspicious` ให้การสำรวจธรรมดา ทำให้แค่เปิดอ่านสมุดทะเบียนแขกก็ถูกมองเท่ากับการงัดตู้นิรภัย (field ชื่อ `IsSuspiciousToTamper`); fingerprint ของ `deceptive-alibi` เปลี่ยนจากการแก้นี้โดยตั้งใจ ส่วน basement/rumor-cascade/reality-breach เท่าเดิม.
+
+### การนำเสนอและเนื้อหา
+
 - **Presentation Direction:** เลือกเป้าหมายเป็น **Stylized 2D Top-Down Hotel Simulation + Visual Novel Dialogue + Detective Journal** เพื่อให้ schedule, movement, rumor และ suspicion อ่านง่ายและเหมาะกับผู้พัฒนา Godot มือใหม่.
 - **2D Graybox Foundation:** เพิ่ม production scene `Scenes2D/Main2D.tscn`, แผนที่โรงแรม 8 ห้อง, character tokens 6 คน, click-to-move, simulation clock, event feedback และ 2D movement acknowledgement โดยล็อก George เป็น Human Host; ตั้งฉากนี้เป็น main scene แล้ว.
 - **Data-driven First Case:** เพิ่ม `characters.json` และ `first-playable-case.json` พร้อม schema validation โดยล็อกเคสแรกเป็น George/Host, Clara (`charlie`)/Hidden Player และ George/Incident Culprit.
-- **Investigation UX Foundation:** แถบ contextual actions อ่านตัวละครและวัตถุจากห้องปัจจุบัน, Visual Novel overlay รองรับถาม schedule/บุคคล/วัตถุและ confront evidence, Inspect บันทึก clue และ Detective Journal แสดง source, confidence, root event และ suspicion score โดยหยุด simulation ระหว่างอ่าน.
+- **Hotel Content & Encounters Expansion:** แผนที่โรงแรมขยายเป็น 8 ห้อง (*Lobby, Hallway, Kitchen, Room 201, Basement, Garden, Security Room, Manager Office*), ระบบวัตถุ Interactive Objects (เซฟ, สมุดทะเบียนแขก, สมุดบัญชีลับ, ตู้ไฟ, กุญแจ) พร้อมปุ่มสำรวจและงัดแงะ (`O`).
+- **Investigation UX:** ลดแผงคำสั่งหลักเหลือ `สำรวจห้อง`, `เปิดแฟ้มคดี` และ `กล่าวหาผู้ต้องสงสัย`; คลิกตัวละครในห้องเพื่อเปิดคำสั่ง `คุย/ติดตาม/ถามด้วยเบาะแส` ตามบริบท แยกบทสนทนาออกจากบันทึกของจอร์จ และแบ่งแฟ้มคดีเป็นหน้าละ 2 เบาะแสแทน scrollbar ยาว.
+- **Guided Playtest UX:** เพิ่มหน้าแรก, วิธีเล่น, เมนูพักเกมและตั้งค่าใน flow เดียว; ภาษาเปลี่ยนเฉพาะใน Settings เพื่อลดหน้าซ้ำซ้อน, onboarding สรุปลูป `เดิน → สังเกต → เปรียบเทียบ → ตัดสินใจ`, ตัวละครใช้จุดขนาดเล็กและแสดงชื่อเฉพาะคนที่เลือกเพื่อไม่บังแผนที่.
+- **Playable Night Shift:** ขยาย prototype เป็นกะกลางคืน 360 นาทีในเกม (ประมาณ 3 นาทีจริง), เวลาและ AI เดินต่อระหว่างสนทนา, เพิ่ม deterministic shift beats/routines, เหตุการณ์แทรก, Insight View, final deduction, ผลชนะ–แพ้ และ replay loop.
+- **Player-facing Information Pass:** ซ่อน `T...`, event ID, root event, confidence percentage และ suspicion vector จาก UI; ใช้เวลาจริงในโลกเกม, ประโยค Who/What/Where, แหล่งที่มาแบบ “เห็นเอง/ได้ยินจาก” และระดับ “น่าเชื่อถือ/ควรจับตา” พร้อม tutorial ตัวอย่างก่อนเริ่มกะ.
+- **Floor-plan & Ending Pass:** เปลี่ยนแผนที่จาก node graph เป็นผังพื้นที่ภายใน/ภายนอกที่อ่านเป็นห้อง ทางเดิน ประตู และจุดใช้งานได้ พร้อมฉากจบสองช่วง (`คำกล่าวหา → ผลที่ตามมา`) ซึ่งอ้างเบาะแสจริงที่เด่นที่สุดของรอบนั้น.
+- **Thai Localization Audit:** UI, tooltip, objective, บทสนทนา, แฟ้มคดี และฉากจบรองรับไทย/อังกฤษ; ใช้คำไทยว่า “ผู้ควบคุม” ในเนื้อหาแทนคำระบบ `Player` และเพิ่ม smoke/regression check ป้องกันหัวข้อ journal หรือชื่อ George ภาษาอังกฤษหลุดในโหมดไทย.
+- **UI Layout Pass:** แผงขวาเปลี่ยนจากพิกัดตายตัวเป็นการวางต่อกันตามลำดับ (`PanelHeading`/`PanelText`/`PanelButton`) ทำให้องค์ประกอบทับกันไม่ได้อีก — แก้กรณีบล็อก `HOW YOU LOOK` ถูกปุ่มกล่าวหาทับจนมองไม่เห็น, `Label` ไม่ wrap จนข้อความทะลุขออกนอกจอ, ป้ายชื่อห้องถูก token ทับ และห้องว่างขึ้นว่า “0 คน” ทุกห้อง.
+- **Overlay Layout Pass:** ปุ่มตัวเลือกเคยตรึงที่ y=310 ตายตัว ทำให้ทุกหน้ามีช่องว่าง 200-400px คั่นกลาง; ตอนนี้วัดความสูงเนื้อหาจริงแล้ววางต่อ, ภาพ portrait แสดงทุกหน้าเพื่อให้คอลัมน์ข้อความไม่กระโดดไปมาระหว่างหน้า และตัวเลือก ≤ 3 ข้อเรียงเต็มความกว้างแทนตารางที่เหลือเศษค้างแถว.
+- **Floor Plan Fix:** ห้องใต้ดินกว้าง 10 หน่วยทับห้องกล้องวงจรปิดและห้องผู้จัดการ ส่วนล็อบบี้ทับห้องครัว/ห้อง 201; ปรับขนาดใน `hotel-world.json` จนไม่มีห้องไหนทับกันเลย.
+- **Reachability:** ห้องที่เดินไปไม่ได้จะหรี่ลง แทนที่จะต้องคลิกแล้วโดนปฏิเสธถึงจะรู้.
+- **Dev tool:** `--capture-ui <path>` เรนเดอร์สองสามเฟรมแล้วบันทึกภาพหน้าจอลงไฟล์ เพื่อตรวจ layout จากของจริงแทนการเดาจากพิกัด (`godot_console --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --capture-ui ui.png [--capture-screen journal|claims|exposure|inspect|deduce|talk] [--thai]`).
+
+### ส่วนที่พักไว้
+
 - **3D Prototype Status:** เก็บ Godot 3D hotel/navigation/HUD เดิมเป็น debug และ regression prototype; ปิด 3D Emotion Bubbles, 3D Interactive Object Nodes และ procedural/spatial audio ไว้ และไม่ขยาย art pipeline ฝั่ง 3D ในช่วง First Fun Playtest.
-- **Seed Variation Gap:** SimRunner deterministic และผ่านทุก scenario แต่การทดสอบ 10 seed ยังได้ fingerprint เดียวกัน จึงต้องเพิ่ม `SessionTruth` / `CaseGenerator` ให้ seed เลือก Hidden Player, Incident Culprit, secrets และ anomaly schedule โดยไม่เปิด hidden truth ให้ NPC.
+
 
 คำสั่งตรวจสอบระบบ:
 
@@ -38,6 +101,11 @@ dotnet run --project tools/SimRunner -- --scenario rumor-cascade --seed 481516 -
 dotnet run --project tools/SimRunner -- --scenario deceptive-alibi --seed 481516 --ticks 16
 dotnet run --project tools/SimRunner -- --scenario reality-breach --seed 481516 --ticks 16
 ```
+
+ทั้ง 4 scenario รันด้วย truth เป็น null จึงเป็น regression baseline ที่ตรึงไว้ — '
+'`basement`, `rumor-cascade`, `deceptive-alibi` ไม่เคยเปลี่ยนตลอดงานชุดนี้ '
+'ส่วน `reality-breach` เปลี่ยนหนึ่งครั้งจากการแยก anomaly tag โดยตั้งใจ '
+'(`abc2735c...` → `9857a3b3...`)
 
 Basement scenario รันผ่าน headless SimRunner พร้อม structured summary, JSONL trace,
 metrics และ SHA-256 event fingerprint (`9a5605575c7970a907aa649f19f645181c3db30f88fd8746c27201e1846acbb9`)
@@ -54,10 +122,46 @@ godot --editor --path src/Game.Client.Godot
 
 ```bash
 godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --smoke-2d
+godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --smoke-2d --thai
 ```
 
+เล่นหนึ่งคืนเต็มโดยไม่มีคนควบคุม แล้วบันทึกว่าเกมพูดอะไรกลับมาบ้างและตอนไหน:
+
+```bash
+godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --night-report night.md
+godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --night-report night.md --night-seed 11
+```
+
+เครื่องมือนี้เดินบน client code path เดียวกับที่ผู้เล่นใช้ ด้วยพฤติกรรม “ผู้เล่นที่อยู่ตรงนั้นจริง”
+(ถาม–ดูของ–เดิน สลับกันทุก 9 นาทีในเกม) และเขียนตารางความหนาแน่นรายชั่วโมง, ช่วงที่เกม
+เงียบยาวที่สุด, จังหวะที่มิเตอร์แต่ละตัวขยับ และฉากจบที่ได้ ผลรอบแรกอยู่ใน
+`playtest/first-night-findings.md`
+
 การทดสอบสำเร็จเมื่อ process คืน exit code `0` และแสดง `HOTEL_2D_SMOKE_PASS` โดยครอบคลุม
-การโหลด content, แผนที่ 8 ห้อง, ตัวละคร 6 คน, click-to-move และ movement acknowledgement กลับเข้า core.
+การโหลด content, แผนที่ 8 ห้อง, ตัวละคร 6 คน, click-to-move, movement acknowledgement,
+บทสนทนา, การตรวจวัตถุ, แฟ้มคดี และ localization ไทย/อังกฤษ.
+
+สร้าง Windows playtest package สำหรับผู้ทดสอบภายนอก:
+
+```powershell
+.\scripts\Build-Playtest.ps1 -GodotPath "C:\Path\To\godot.exe"
+```
+
+สคริปต์จะ build/test solution, export preset `Windows Desktop`, **เล่นหนึ่งคืนเต็มใน build
+ที่ export ออกมาแล้วจริง ๆ** ก่อนแพ็ก แล้วจึงสร้าง zip พร้อมคู่มือผู้เล่นและ feedback template
+จาก `playtest/` โดยไม่รวม source code ใน package;
+moderator ใช้ `playtest/protocol.md` จาก repository แยกต่างหาก ผู้ทดสอบต้องใช้ Godot 4.7.2 .NET export templates บนเครื่อง build เท่านั้น
+
+Godot ต้องการ solution อยู่ในโฟลเดอร์ของ Godot project เอง (`src/Game.Client.Godot/Game.Client.Godot.sln`)
+ไม่ใช่ `Game.sln` ที่ root — ถ้าไม่มี มันจะข้ามการ build C# ทั้งหมด **แล้วรายงานว่าสำเร็จ**
+ได้ไฟล์ที่รันแล้ว segfault ทันที สคริปต์จึงตรวจว่ามี solution ก่อนเริ่ม ตรวจว่า export ได้
+`.exe` / `.pck` / โฟลเดอร์ `data_*` ครบ เล่นหนึ่งคืนใน build นั้น และตรวจขนาด zip ก่อนจบ
+เพราะ exit code ของ Godot เชื่อไม่ได้ และ `godot.exe` บน Windows จะ detach จาก console
+(สคริปต์เลยเลือก `godot_console.exe` ให้อัตโนมัติถ้ามี)
+ติดตั้งผ่าน Godot Editor > Editor > Manage Export Templates ก่อนรันสคริปต์ครั้งแรก
+
+เอกสารการทดลองอยู่ในโฟลเดอร์ [playtest](playtest/README.md) โดย `README.md` สำหรับผู้เล่น,
+`protocol.md` สำหรับ moderator และ `feedback-template.md` สำหรับแบบประเมินหลังเล่น
 
 ฉาก 3D เดิมยังเรียกตรวจ regression ได้ด้วย:
 
@@ -783,6 +887,8 @@ Perception      = event-driven
 game/
 ├── src/
 │   ├── Game.Sim/
+│   │   ├── Cases/          # SessionTruth / CaseGenerator
+│   │   ├── Schedules/      # HotelNightRoutines / SecretStaging / SocialGraph / Needs
 │   │   ├── Entities/
 │   │   ├── Time/
 │   │   ├── Events/
@@ -2412,7 +2518,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Determinism test ผ่าน (160/160 tests passed)
+- [x] Automated tests ผ่าน (285/285 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2466,13 +2572,20 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 ## 31.3 Revised Roadmap
 
 1. **Milestone 1 — Format & Content Lock (เสร็จแล้ว):** ยืนยันรายชื่อตัวละคร/role, first playable case และ mapping ระหว่างตัวละครใน narrative (`Clara`, `Elias`, `Mira`) กับ internal IDs ปัจจุบัน (`charlie`, `dana`, `evelyn`).
-2. **Milestone 2 — 2D Graybox (ฐานหลักเสร็จแล้ว):** สร้างแผนที่โรงแรม 8 ห้อง, character tokens, click-to-move, clock/schedule และ event feedback โดยใช้ placeholder ทั้งหมด; งานที่เหลือคือ contextual interaction และ readability ระหว่างการสืบสวน.
-3. **Milestone 3 — Investigation UX (กำลังพัฒนา):** contextual actions, Visual Novel dialogue, inspect และ Journal พร้อม source/confidence ใช้งานได้แล้ว; เหลือ Follow, evidence selection, Timeline filtering และปรับ dialogue content ให้อ่านเป็นธรรมชาติ.
-4. **Milestone 4 — Deterministic Case Generation:** เพิ่ม `SessionTruth` / `CaseGenerator`; seed เดิมต้องได้ case/trace เดิม ส่วน seed ต่างกันต้องเปลี่ยน Hidden Player, culprit, secrets หรือ anomaly schedule อย่างควบคุมได้.
-5. **Milestone 5 — Accusation & Endings:** ให้เลือกผู้ถูกกล่าวหาและหลักฐาน พร้อมเริ่มจาก Correct Accusation, False Accusation และ You Were The Player.
-6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
+2. **Milestone 2 — 2D Graybox (เสร็จระดับ playable):** แผนที่โรงแรม 8 ห้องแสดงโครงสร้างพื้นที่ ประตู ทางเดินและจุดใช้งาน, character tokens ไม่บังห้อง, click-to-move, clock/schedule และ event feedback ทำงานแล้ว; art ยังเป็น placeholder.
+3. **Milestone 3 — Investigation UX (เสร็จระดับ playable vertical slice):** หน้าแรก/ตั้งค่า/onboarding, contextual character actions, Follow, Visual Novel dialogue, inspect, แฟ้มคดีแบบแบ่งหน้า, continuous-time night shift, Insight View, final accusation และ narrative aftermath ใช้งานได้แล้ว; เหลือ external playtest รอบใหม่เพื่อปรับ pacing/wording/เวลา.
+4. **Milestone 4 — Deterministic Case Generation (เสร็จแล้ว):** `SessionTruth` / `CaseGenerator` ใช้ PCG32 stream แยก (`RandomSequence = 7717`) จึงไม่เลื่อนลำดับสุ่มของ simulation; seed เดิมได้ case/trace เดิม และ replay ใช้ seed ใหม่จึงได้คดีใหม่ โดย hidden truth ไม่รั่วเข้า WorldEvent/Observation/Memory/Suspicion (บังคับด้วย `SessionTruthIsolationTests`). ยังเปิดทางเลือก `AllowHostAsHiddenPlayer` ไว้ให้ Milestone 5 เปิดตอนมีฉากจบ "You Were The Player".
+5. **Milestone 5 — Accusation & Endings (เสร็จแล้ว):** ฉากจบครบสามทางตาม `EndingKind` — Correct Accusation, False Accusation และ You Were The Player — โดยหน้าสรุปคดีเอ่ยชื่อตัวเองได้ และ seed เลือก host เป็น hidden player ได้ราว 1 ใน 6 คืน (`AllowHostAsHiddenPlayer` เปิดแล้ว); เหลือขยายเนื้อหาฉากจบตามผล playtest.
+6. **Milestone 6 — First Fun Playtest (เริ่มแล้ว):** เล่นคืนแรกภายในด้วย `--night-report`
+ครบ 15 seed และบันทึกผลไว้ที่ `playtest/first-night-findings.md`; ก่อนเชิญผู้ทดสอบภายนอก
+ต้องตัดสินใจเรื่องบาลานซ์ที่พบก่อน แล้วจึงทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding,
+suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent;
+`playtest/protocol.md` และ `playtest/feedback-template.md` ครอบคลุมคำให้การ, การจับโกหก,
+ป้ายความสงสัยที่มีต่อผู้เล่นเอง, ฉากที่โรงแรมลงมือ และฉากจบทั้งสี่แบบแล้ว พร้อมเตือน moderator
+ว่าคืนแรกของทุกคนคือ seed เดียวกัน (`481516`) ซึ่งเป็นคืนที่ข้อมูลเยอะที่สุดใน 15 คืนที่วัด
+จึงต้องให้ผู้เล่นเล่นรอบสองก่อนสรุป.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate:** คืน CI, เพิ่ม headless tests/smoke test และ Windows export artifact ก่อนแจก build ให้ผู้ทดสอบภายนอก.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 285/285 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 
@@ -2487,8 +2600,21 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 - [x] ล็อก CharacterDefinition และ first playable case แบบ data-driven พร้อม validation
 - [x] สร้างฐาน 2D graybox: โรงแรม 8 ห้อง, tokens 6 คน, click-to-move, clock/event feedback และ headless smoke test
 - [x] เพิ่ม contextual Talk/Inspect, Visual Novel dialogue และ Detective Journal รุ่นแรก
-- [ ] เพิ่ม Follow, evidence selection, Timeline filters และ contextual action ที่ครอบคลุมวัตถุ/ตัวละครทุกกรณี
-- [ ] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
+- [x] เพิ่ม Follow NPC, evidence selection และ Timeline filters (เวลา/ตัวละคร/ห้อง/kind/event type)
+- [x] ปรับ dialogue content แบบ data-driven และเพิ่ม readability cues บน 2D HUD
+- [x] เพิ่มหน้าแรก/ตั้งค่า/onboarding, ลดคำสั่งหลักเหลือ 3 ปุ่ม และใช้ direct NPC selection จาก feedback 1/5
+- [x] เพิ่มกะกลางคืนแบบเวลาเดินต่อเนื่อง, AI shift beats, เหตุการณ์หักมุม, Insight View และตอนจบแพ้–ชนะ
+- [x] ปรับ floor plan, token visibility, case-file pagination และฉากจบเชิงเนื้อเรื่องสองช่วง
+- [x] ตรวจคำแปลไทยและเพิ่ม regression check ใน Thai smoke test
+- [x] ต่อระบบที่เขียนเสร็จแต่ไม่เคยต่อสาย (Schedules, Secrets, Social graph, Anomalies, Needs, Conspiracy)
+- [x] เพิ่ม Exposure / Contradiction / Closing Net ให้ลูปการเล่นมีการตัดสินใจ
+- [x] เพิ่มฉากจบ You Were The Player ครบ Milestone 5
+- [ ] เก็บ external playtest เพื่อปรับ pacing, wording และ contextual action edge cases
+- [x] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
+- [x] เล่นคืนแรกภายในครบ 15 seed ด้วย `--night-report` และบันทึกผลไว้
+- [x] ปรับบาลานซ์จากผลคืนแรก (เกณฑ์ exposure, จังหวะ Closing Net, ถ้อยคำที่เฉลยคำตอบ) แล้ววัดซ้ำ
+- [ ] แก้ให้การอนุมานจากเบาะแสธรรมดาชี้ถูกคนโดยไม่ต้องพึ่ง anomaly
+- [x] เพิ่ม metric ของ Exposure / Contradiction / Closing Net และฉากจบลงใน playtest protocol และแบบฟอร์ม
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ
 

@@ -28,14 +28,34 @@ public sealed class BasementScenario
         bool autoCompleteMovements = false) =>
         new(_rules, options, autoCompleteMovements);
 
+    /// <summary>
+    /// How far past the requested tick count the scripted milestone chain is given
+    /// to resolve before the run is called stuck.
+    /// </summary>
+    public const int CompletionGraceTicks = 4_096;
+
     public BasementScenarioResult Run(BasementScenarioOptions options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         BasementScenarioSession session = CreateSession(
             options,
             autoCompleteMovements: true);
-        while (!session.IsComplete)
+
+        // Completion needs more than the tick count: the Anna/Bob milestone chain
+        // has to resolve too. A generated SessionTruth can steer a character that
+        // never satisfies it, and an unbounded loop would hang instead of saying so.
+        long limit = options.Ticks + CompletionGraceTicks;
+        while (!session.IsComplete && session.Now.Tick < limit)
         {
             _ = session.AdvanceOneTick();
+        }
+
+        if (!session.IsComplete)
+        {
+            throw new InvalidOperationException(
+                $"The basement scenario did not complete within {limit} ticks " +
+                $"(stuck in phase '{session.Phase}'). A generated case may not " +
+                "satisfy the scripted milestone chain.");
         }
 
         return session.BuildResult();

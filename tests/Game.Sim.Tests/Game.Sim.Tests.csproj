@@ -24,5 +24,9 @@
       <Link>Data\SuspicionRules\mvp.json</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="..\..\src\Game.Content\Data\Dialogue\dialogue-lines.json">
+      <Link>Data\Dialogue\dialogue-lines.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

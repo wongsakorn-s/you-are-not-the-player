@@ -29,6 +29,15 @@ public sealed class CoordinatedNpcMovementExecutor : INpcMovementExecutor
     {
         ArgumentNullException.ThrowIfNull(command);
         MovementSnapshot movement = _coordinator.Request(command);
+
+        // Request cancels any in-flight session for this actor, so the previously
+        // tracked id is terminal from here on regardless of how the new request
+        // resolves. Drop it before the early returns below, otherwise a Failed or
+        // NoMovement outcome leaves the actor permanently IsBusy, keeps a cancelled
+        // snapshot in PendingMovements, and lets a late arrival signal call
+        // Complete on a cancelled session.
+        _ = _activeRequests.Remove(command.Actor);
+
         if (movement.Status == MovementStatus.Failed)
         {
             return new NpcMovementExecution(NpcMovementExecutionStatus.Failed, movement);

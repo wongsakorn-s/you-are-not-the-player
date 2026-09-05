@@ -11,8 +11,18 @@ namespace Game.Sim.Anomalies;
 
 public sealed class RealityAnomalySystem
 {
-    private static readonly EventTag[] AnomalyTags = [
+    // One tag set carrying both Pattern and Suspicious made every anomaly match
+    // both suspicion rules at once, so a single sighting scored 65 impossible
+    // behaviour and 50 meta behaviour - roughly double what either rule was
+    // written to award, and enough to send the whole cast into a following and
+    // gossiping spiral off one event. The rules are alternatives; the tags now
+    // say which one an anomaly is.
+    private static readonly EventTag[] RepeatedRealityTags = [
         EventTag.Pattern,
+        EventTag.Secret,
+    ];
+
+    private static readonly EventTag[] ImpossibleMovementTags = [
         EventTag.Suspicious,
         EventTag.Secret,
     ];
@@ -53,37 +63,65 @@ public sealed class RealityAnomalySystem
             player,
             EventType.RealityAnomaly,
             location,
-            tags: AnomalyTags,
+            tags: RepeatedRealityTags,
             payload: new RealityAnomalyPayload(
                 AnomalyKind.SaveReload,
                 "A temporal rift passed through the area. Events from moments ago feel strangely repeated (Déjà Vu).",
                 player));
 
         _eventBuffer.Publish(anomalyEvent);
+        RememberForWitnesses(anomalyEvent, player, location, PerceptionChannel.Audio);
+        return anomalyEvent;
+    }
 
-        // All other entities in the location perceive this unnatural temporal sensation
-        foreach (EntityState other in _world.Entities.Where(e => e.Id != player && e.LogicalLocation == location))
+    /// <summary>
+    /// Somebody has no memory of a conversation that just happened. To the person
+    /// they were talking to it is the world skipping, not a lapse of attention.
+    /// </summary>
+    public WorldEvent TriggerDialogueResetAnomaly(EntityId subject, LocationId location)
+    {
+        WorldEvent resetEvent = _events.Create(
+            subject,
+            EventType.RealityAnomaly,
+            location,
+            tags: RepeatedRealityTags,
+            payload: new RealityAnomalyPayload(
+                AnomalyKind.DialogueReset,
+                $"{subject.Value} repeated a greeting word for word, with no memory of having just said it.",
+                subject));
+
+        _eventBuffer.Publish(resetEvent);
+        RememberForWitnesses(resetEvent, subject, location, PerceptionChannel.Visual);
+        return resetEvent;
+    }
+
+    private void RememberForWitnesses(
+        WorldEvent anomalyEvent,
+        EntityId subject,
+        LocationId location,
+        PerceptionChannel channel)
+    {
+        foreach (EntityState witness in _world.Entities
+            .Where(entity => entity.Id != subject && entity.LogicalLocation == location))
         {
             MemoryRecord? memory = _memories.Remember(new Observation(
                 id: new ObservationId(anomalyEvent.Id.Value),
                 sourceEvent: anomalyEvent.Id,
-                observer: other.Id,
-                perceivedActor: player,
+                observer: witness.Id,
+                perceivedActor: subject,
                 perceivedType: EventType.RealityAnomaly,
                 location: location,
-                perceivedTags: AnomalyTags,
+                perceivedTags: [.. anomalyEvent.Tags],
                 time: _clock.Now,
                 confidence: 1.0f,
                 salience: 1.0f,
-                channel: PerceptionChannel.Audio));
+                channel: channel));
 
             if (memory is not null)
             {
-                _ = _suspicion.ProcessMemory(other.Id, memory);
+                _ = _suspicion.ProcessMemory(witness.Id, memory);
             }
         }
-
-        return anomalyEvent;
     }
 
     public WorldEvent TriggerFastTravelAnomaly(EntityId actor, LocationId destination)
@@ -92,35 +130,14 @@ public sealed class RealityAnomalySystem
             actor,
             EventType.RealityAnomaly,
             destination,
-            tags: AnomalyTags,
+            tags: ImpossibleMovementTags,
             payload: new RealityAnomalyPayload(
                 AnomalyKind.TheBlink,
                 $"{actor.Value} materialized abruptly out of thin air without traversing any portals.",
                 actor));
 
         _eventBuffer.Publish(blinkEvent);
-
-        foreach (EntityState witness in _world.Entities.Where(e => e.Id != actor && e.LogicalLocation == destination))
-        {
-            MemoryRecord? memory = _memories.Remember(new Observation(
-                id: new ObservationId(blinkEvent.Id.Value),
-                sourceEvent: blinkEvent.Id,
-                observer: witness.Id,
-                perceivedActor: actor,
-                perceivedType: EventType.RealityAnomaly,
-                location: destination,
-                perceivedTags: AnomalyTags,
-                time: _clock.Now,
-                confidence: 1.0f,
-                salience: 1.0f,
-                channel: PerceptionChannel.Visual));
-
-            if (memory is not null)
-            {
-                _ = _suspicion.ProcessMemory(witness.Id, memory);
-            }
-        }
-
+        RememberForWitnesses(blinkEvent, actor, destination, PerceptionChannel.Visual);
         return blinkEvent;
     }
 }

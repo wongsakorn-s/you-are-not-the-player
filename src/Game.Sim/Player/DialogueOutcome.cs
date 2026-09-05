@@ -8,4 +8,6 @@ public sealed record DialogueOutcome(
     string Text,
     MemoryRecord? TransferredMemory = null,
     WorldEvent? GeneratedEvent = null,
-    string? FailureReason = null);
+    string? FailureReason = null,
+    AlibiClaim? Claim = null,
+    ConfrontationResult Confrontation = ConfrontationResult.None);

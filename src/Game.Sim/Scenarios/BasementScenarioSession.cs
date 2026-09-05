@@ -1,6 +1,7 @@
 using Game.Sim.Actions;
 using Game.Sim.Anomalies;
 using Game.Sim.Behaviors;
+using Game.Sim.Cases;
 using Game.Sim.Brain;
 using Game.Sim.Conspiracy;
 using Game.Sim.Entities;
@@ -16,6 +17,7 @@ using Game.Sim.PlayerAi;
 using Game.Sim.Roles;
 using Game.Sim.Routines;
 using Game.Sim.Schedules;
+using Game.Sim.Secrets;
 using Game.Sim.Snapshots;
 using Game.Sim.Suspicion;
 using Game.Sim.Time;
@@ -28,7 +30,7 @@ public sealed class BasementScenarioSession
     private static readonly LocationId Hallway = new("hallway");
 
     private readonly BasementScenarioOptions _options;
-    private readonly SimClock _clock = new(ticksPerSecond: 1);
+    private readonly SimClock _clock;
     private readonly WorldState _world;
     private readonly WorldEventBuffer _buffer = new();
     private readonly CoordinatedNpcMovementExecutor _movement;
@@ -48,6 +50,11 @@ public sealed class BasementScenarioSession
     private readonly List<WorldEvent> _newEvents = [];
     private readonly List<NpcRoutineDecision> _decisions = [];
     private readonly Dictionary<EntityId, SimTime> _firstSuspicion = [];
+    private readonly RoleDutySystem? _duties;
+    private readonly SecretPlanRepository? _secretPlans;
+    private readonly Queue<AnomalyBeat> _pendingAnomalies = new();
+    private readonly EntityId _hiddenPlayer;
+    private readonly PlayerAiArchetype _hiddenPlayerArchetype;
     private WorldEvent? _restrictedEntry;
     private NpcRoutineDecision? _annaInitialDecision;
     private NpcRoutineDecision? _bobInitialDecision;
@@ -65,6 +72,21 @@ public sealed class BasementScenarioSession
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(options);
         _options = options;
+
+        // One tick is one minute of the night, starting at 23:00, so the schedules
+        // line up with the clock the player is shown. Without a truth this stays
+        // the real-time clock the pinned scenario fingerprints were taken against.
+        _clock = options.Truth is null
+            ? new SimClock(ticksPerSecond: 1)
+            : new SimClock(
+                ticksPerSecond: 1,
+                startOfDay: SimMinuteOfDay.FromHourMinute(23, 0),
+                ticksPerMinute: 1);
+
+        // Without a truth the session keeps its scripted arrangement, which is what
+        // the regression scenarios and their pinned fingerprints depend on.
+        _hiddenPlayer = options.Truth?.HiddenPlayer ?? BasementScenario.George;
+        _hiddenPlayerArchetype = options.Truth?.HiddenPlayerArchetype ?? PlayerAiArchetype.Explorer;
         _world = CreateWorld();
 
         if (initialTick > 0)
@@ -75,7 +97,9 @@ public sealed class BasementScenarioSession
         var eventFactory = new WorldEventFactory(_clock, new SequentialEventIdGenerator(Math.Max(1, firstEventId)));
         var patterns = new BehaviorPatternSystem(
             _clock,
-            new RuleBasedBehaviorPatternDetector(_clock.TicksPerSecond),
+            new RuleBasedBehaviorPatternDetector(
+                _clock.TicksPerSecond,
+                options.Truth is null ? null : HotelNightRoutines.PatternPolicy()),
             eventFactory,
             _buffer);
         _interactions = new InteractionActionHandler(_world, eventFactory, _buffer, patterns);
@@ -98,6 +122,23 @@ public sealed class BasementScenarioSession
             new ExponentialMemoryDecayPolicy(0.0, 0.0));
         _suspicion = new SuspicionSystem(_memories, rules);
         _objects = HotelObjectRegistry.CreateDefaultHotelObjects();
+        if (options.Truth is { AnomalySchedule.Count: > 0 } anomalyTruth)
+        {
+            foreach (AnomalyBeat beat in anomalyTruth.AnomalySchedule.OrderBy(beat => beat.Tick))
+            {
+                _pendingAnomalies.Enqueue(beat);
+            }
+        }
+
+        if (options.Truth is not null)
+        {
+            _duties = new RoleDutySystem(_clock, _world, eventFactory, _buffer, patterns);
+            foreach ((EntityId entity, RoleId role) in HotelRoles)
+            {
+                _duties.Register(entity, role);
+            }
+        }
+
         _dialogue = new DialogueSystem(
             _clock,
             _world,
@@ -142,13 +183,7 @@ public sealed class BasementScenarioSession
             _objectActions);
 
         var playerDirector = new PlayerAiDirector(
-            [new PlayerAiProfile(
-                BasementScenario.George,
-                PlayerAiArchetype.Explorer,
-                explorationObjectives: [new ExplorationObjective(
-                    "explore-basement",
-                    BasementScenario.Basement,
-                    "basement-door")])],
+            [CreatePlayerAiProfile(_hiddenPlayer, _hiddenPlayerArchetype)],
             _interactions,
             probes);
         _playerRoutine = new NpcRoutineSystem(
@@ -157,25 +192,47 @@ public sealed class BasementScenarioSession
             _movement,
             new UtilityNpcBrain([new ScheduleGoalSource(), playerDirector]),
             [playerDirector]);
-        _playerRoutine.Register(CreateRoutineProfile(
-            BasementScenario.George,
-            BasementScenario.Lobby));
+        // When the truth says the host is the one being steered, the human already
+        // is the Player AI. Registering it as well would put two drivers on one
+        // character - the same double-drive that made George unplayable before
+        // Milestone 4 - and would rob the twist of its meaning: the Player-like
+        // behaviour the cast reacts to has to be the human's own.
+        if (options.Truth?.HostIsHiddenPlayer != true)
+        {
+            _playerRoutine.Register(CreateRoutineProfile(
+                _hiddenPlayer,
+                BasementScenario.Lobby));
+        }
 
-        var behaviorProfiles = new SuspicionBehaviorRepository([
-            new SuspicionBehaviorProfile(
-                BasementScenario.Anna,
-                [BasementScenario.Bob],
-                BasementScenario.Lobby),
-            new SuspicionBehaviorProfile(
-                BasementScenario.Bob,
-                [],
-                BasementScenario.Lobby),
-        ]);
+        // Without a truth this stays the two hand-written profiles the scripted
+        // scenario was pinned against; with one, everybody can react to what they
+        // see and has somebody to tell.
+        SuspicionBehaviorRepository behaviorProfiles = options.Truth is null
+            ? new SuspicionBehaviorRepository([
+                new SuspicionBehaviorProfile(
+                    BasementScenario.Anna,
+                    [BasementScenario.Bob],
+                    BasementScenario.Lobby),
+                new SuspicionBehaviorProfile(
+                    BasementScenario.Bob,
+                    [],
+                    BasementScenario.Lobby),
+            ])
+            : new SuspicionBehaviorRepository(HotelRoles.Select(item =>
+                new SuspicionBehaviorProfile(
+                    item.Entity,
+                    HotelSocialGraph.Confidants(item.Role)
+                        .SelectMany(confidant => HotelRoles
+                            .Where(other => other.Role == confidant)
+                            .Select(other => other.Entity))
+                        .Where(contact => contact != item.Entity),
+                    HotelSocialGraph.SafePlace(item.Role))));
         var behaviorGoals = new SuspicionDrivenGoalSource(
             _suspicion,
             _memories,
             _clock,
-            behaviorProfiles);
+            behaviorProfiles,
+            options.Truth is null ? null : HotelNightRoutines.BehaviorPolicy());
         var behaviorActions = new SuspicionBehaviorActionSystem(
             _clock,
             _world,
@@ -183,27 +240,60 @@ public sealed class BasementScenarioSession
             _suspicion,
             eventFactory,
             _buffer);
+        // Secrets are what make an odd-looking character ambiguous. Without them
+        // the only person in the hotel behaving strangely is the Player AI, and
+        // "strange means Player" becomes a rule that simply works.
+        // NeedGoalSource joins the ordinary cast only. Whatever is steering the
+        // hidden player is not the sort of thing that gets hungry, and giving it
+        // errands would blunt the Player-like behaviour that is meant to give it
+        // away.
+        var goalSources = new List<INpcGoalSource>
+        {
+            new ScheduleGoalSource(),
+            behaviorGoals,
+            new NeedGoalSource(),
+        };
+        var observers = new List<INpcRoutineDecisionObserver> { behaviorActions };
+        if (_options.Truth is { Secrets.Count: > 0 } truth)
+        {
+            _secretPlans = HotelSecretStaging.Stage(
+                truth.Secrets,
+                entity => HotelRoles.FirstOrDefault(item => item.Entity == entity).Role);
+            goalSources.Add(new SecretGoalSource(_secretPlans));
+            observers.Add(new SecretBehaviorSystem(
+                _clock,
+                _world,
+                eventFactory,
+                _buffer,
+                _secretPlans));
+        }
+
         _behaviorRoutine = new NpcRoutineSystem(
             _clock,
             _world,
             _movement,
-            new UtilityNpcBrain([new ScheduleGoalSource(), behaviorGoals]),
-            [behaviorActions]);
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Anna,
-            BasementScenario.Basement));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Bob,
-            BasementScenario.Lobby));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Charlie,
-            BasementScenario.Lobby));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Dana,
-            BasementScenario.Lobby));
-        _behaviorRoutine.Register(CreateRoutineProfile(
-            BasementScenario.Evelyn,
-            BasementScenario.Lobby));
+            new UtilityNpcBrain(goalSources),
+            observers);
+        // Whoever the Player AI is steering is deliberately left out: two routine
+        // systems issuing movement for the same actor would cancel each other's
+        // requests every tick.
+        (EntityId Entity, LocationId Home)[] behaviorRoster =
+        [
+            (BasementScenario.Anna, BasementScenario.Basement),
+            (BasementScenario.Bob, BasementScenario.Lobby),
+            (BasementScenario.Charlie, BasementScenario.Lobby),
+            (BasementScenario.Dana, BasementScenario.Lobby),
+            (BasementScenario.Evelyn, BasementScenario.Lobby),
+        ];
+        foreach ((EntityId entity, LocationId home) in behaviorRoster)
+        {
+            if (entity == _hiddenPlayer)
+            {
+                continue;
+            }
+
+            _behaviorRoutine.Register(CreateRoutineProfile(entity, home));
+        }
     }
 
     public ulong Seed => _options.Seed;
@@ -222,6 +312,9 @@ public sealed class BasementScenarioSession
     public IReadOnlyList<NpcRoutineDecision> Decisions => _decisions;
 
     public IReadOnlyList<MovementSnapshot> PendingMovements => _movement.PendingMovements;
+
+    public NpcMovementExecution RequestNpcMove(EntityId actor, LocationId destination) =>
+        _movement.Execute(new MoveEntityCommand(actor, destination));
 
     public int ObservationCount => _observationCount;
 
@@ -272,7 +365,7 @@ public sealed class BasementScenarioSession
             Phase = BasementSessionPhase.ExplorerMovement;
         }
         else if (Phase == BasementSessionPhase.WaitingForExplorer &&
-                 movement.Actor == BasementScenario.George)
+                 movement.Actor == _hiddenPlayer)
         {
             Phase = BasementSessionPhase.FeedbackLoop;
         }
@@ -293,7 +386,7 @@ public sealed class BasementScenarioSession
             Phase = BasementSessionPhase.WitnessMovement;
         }
         else if (Phase == BasementSessionPhase.WaitingForExplorer &&
-                 movement.Actor == BasementScenario.George)
+                 movement.Actor == _hiddenPlayer)
         {
             Phase = BasementSessionPhase.ExplorerMovement;
         }
@@ -316,6 +409,63 @@ public sealed class BasementScenarioSession
 
     public SuspicionSnapshot GetSuspicion(EntityId observer, EntityId subject) =>
         _suspicion.GetSnapshot(observer, subject, _clock.Now);
+
+    /// <summary>
+    /// Turns the ordinary suspicion pipeline around and asks what the hotel has
+    /// on the host. Nothing hidden is consulted; every entry traces back to an
+    /// observation some NPC actually made.
+    /// </summary>
+    /// <summary>
+    /// The private business the cast is conducting tonight. Exposed for tests and
+    /// tooling only - nothing the player can see may be derived from it, since the
+    /// whole point is that a secret and a Player look alike from the outside.
+    /// </summary>
+    public IReadOnlyList<SecretPlan> SecretPlans => _secretPlans?.Plans ?? [];
+
+    /// <summary>Everything the cast has told the player about their whereabouts.</summary>
+    public IReadOnlyList<AlibiClaim> Claims => _dialogue.Claims.Claims;
+
+    /// <summary>
+    /// The claims the player currently holds a clue against. First-hand clues sort
+    /// first because those are the ones worth staking a confrontation on.
+    /// </summary>
+    public IReadOnlyList<Contradiction> FindContradictions(EntityId host) =>
+        ContradictionFinder.Find(_dialogue.Claims.Claims, GetMemories(host));
+
+    public ExposureReport GetExposure(EntityId host)
+    {
+        var observers = new List<ObserverExposure>();
+        var reasons = new List<ExposureReason>();
+        foreach (EntityState entity in _world.Entities.OrderBy(
+            entity => entity.Id.Value,
+            StringComparer.Ordinal))
+        {
+            if (entity.Id == host)
+            {
+                continue;
+            }
+
+            SuspicionSnapshot snapshot = GetSuspicion(entity.Id, host);
+            if (snapshot.Evidence.Count == 0)
+            {
+                continue;
+            }
+
+            observers.Add(new ObserverExposure(
+                entity.Id,
+                ExposureReport.WeighVector(snapshot.Vector),
+                ExposureReport.WeighPlayerLike(snapshot.Vector),
+                snapshot.Vector,
+                snapshot.Evidence.Count));
+            reasons.AddRange(snapshot.Evidence.Select(evidence => new ExposureReason(
+                entity.Id,
+                evidence.Contribution.RuleId,
+                evidence.Contribution.Dimension,
+                evidence.EffectiveStrength)));
+        }
+
+        return new ExposureReport(host, observers, reasons);
+    }
 
     public void Interact(EntityId actor, string interactionId)
     {
@@ -600,7 +750,7 @@ public sealed class BasementScenarioSession
         session.Phase = Enum.Parse<BasementSessionPhase>(snapshot.Metadata.Phase, ignoreCase: true);
 
         session._restrictedEntry = session._events.FirstOrDefault(e =>
-            e.Actor == BasementScenario.George &&
+            e.Actor == session._hiddenPlayer &&
             e.Location == BasementScenario.Basement &&
             e.Type == EventType.EnterLocation);
 
@@ -680,13 +830,13 @@ public sealed class BasementScenarioSession
             memory =>
                 memory.Kind == MemoryKind.Social &&
                 memory.RootEventId == _restrictedEntry.Id,
-            "Bob did not retain exactly one social memory of George's basement entry.");
+            $"Bob did not retain exactly one social memory of {_hiddenPlayer}'s basement entry.");
         SuspicionSnapshot annaSuspicion = GetSuspicion(
             BasementScenario.Anna,
-            BasementScenario.George);
+            _hiddenPlayer);
         SuspicionSnapshot bobSuspicion = GetSuspicion(
             BasementScenario.Bob,
-            BasementScenario.George);
+            _hiddenPlayer);
         EnsureSuspicionExists(annaSuspicion, "Anna");
         EnsureSuspicionExists(bobSuspicion, "Bob");
 
@@ -711,7 +861,36 @@ public sealed class BasementScenarioSession
             _bobInitialDecision,
             GetLogicalLocation(BasementScenario.Anna),
             GetLogicalLocation(BasementScenario.Bob),
-            GetLogicalLocation(BasementScenario.George));
+            GetLogicalLocation(_hiddenPlayer));
+    }
+
+    /// <summary>
+    /// Fires the anomalies the seed scheduled for this point in the night.
+    /// </summary>
+    /// <remarks>
+    /// These were generated by CaseGenerator since Milestone 4 and read by nobody,
+    /// so RealityAnomalySystem - the subsystem the whole premise is named after -
+    /// had never produced a single event in a playable run.
+    /// <para>
+    /// Whether anyone is standing there to see it is left entirely to chance. An
+    /// anomaly nobody witnesses simply did not happen as far as the case is
+    /// concerned, which is the point: the strongest evidence in the game is also
+    /// the easiest to miss.
+    /// </para>
+    /// </remarks>
+    private void ReleaseDueAnomalies()
+    {
+        while (_pendingAnomalies.Count > 0 && _pendingAnomalies.Peek().Tick <= _clock.Now.Tick)
+        {
+            AnomalyBeat beat = _pendingAnomalies.Dequeue();
+            LocationId where = GetLogicalLocation(beat.Subject);
+            _ = beat.Kind switch
+            {
+                AnomalyKind.TheBlink => _anomalies.TriggerFastTravelAnomaly(beat.Subject, where),
+                AnomalyKind.DialogueReset => _anomalies.TriggerDialogueResetAnomaly(beat.Subject, where),
+                _ => _anomalies.TriggerSaveReloadAnomaly(beat.Subject, where),
+            };
+        }
     }
 
     private void RunInitialInteraction()
@@ -743,13 +922,19 @@ public sealed class BasementScenarioSession
         IReadOnlyList<NpcRoutineDecision> decisions = _playerRoutine.Tick(SimDelta.OneTick);
         _decisions.AddRange(decisions);
         ProcessPendingEvents();
-        Phase = _movement.IsBusy(BasementScenario.George)
+        Phase = _movement.IsBusy(_hiddenPlayer)
             ? BasementSessionPhase.WaitingForExplorer
             : BasementSessionPhase.FeedbackLoop;
     }
 
     private void RunFeedbackTick()
     {
+        ReleaseDueAnomalies();
+
+        // Before the cast decides anything, ask whether anyone is already off
+        // their post. The event this publishes is what RoleNeglect counts and what
+        // the RoleDeviation suspicion rule scores.
+        _ = _duties?.Tick();
         IReadOnlyList<NpcRoutineDecision> decisions = _behaviorRoutine.Tick(SimDelta.OneTick);
         foreach (NpcRoutineDecision decision in decisions)
         {
@@ -800,7 +985,7 @@ public sealed class BasementScenarioSession
         {
             _events.Add(worldEvent);
             _newEvents.Add(worldEvent);
-            if (worldEvent.Actor == BasementScenario.George &&
+            if (worldEvent.Actor == _hiddenPlayer &&
                 worldEvent.Type == EventType.EnterLocation &&
                 worldEvent.Tags.Contains(EventTag.Restricted))
             {
@@ -826,7 +1011,7 @@ public sealed class BasementScenarioSession
 
         SuspicionSnapshot bobSnapshot = GetSuspicion(
             BasementScenario.Bob,
-            BasementScenario.George);
+            _hiddenPlayer);
         if (bobSnapshot.Evidence.Count > 0)
         {
             _firstSuspicion.TryAdd(BasementScenario.Bob, _clock.Now);
@@ -898,10 +1083,78 @@ public sealed class BasementScenarioSession
         return graph;
     }
 
-    private static NpcRoutineProfile CreateRoutineProfile(
+    // PlayerAiProfile validates that the objective set matches the archetype, so
+    // each archetype gets the objectives it is defined by: an Explorer probes a
+    // boundary, a Completionist exhausts interactions, a Roleplayer does neither
+    // and is only visible through how ordinary it tries to look.
+    private static PlayerAiProfile CreatePlayerAiProfile(
+        EntityId entity,
+        PlayerAiArchetype archetype) => archetype switch
+        {
+            PlayerAiArchetype.Explorer => new PlayerAiProfile(
+                entity,
+                archetype,
+                explorationObjectives: [new ExplorationObjective(
+                    "explore-basement",
+                    BasementScenario.Basement,
+                    "basement-door")]),
+            PlayerAiArchetype.Completionist => new PlayerAiProfile(
+                entity,
+                archetype,
+                completionObjectives:
+                [
+                    new CompletionObjective(
+                        "sweep-lobby",
+                        BasementScenario.Lobby,
+                        InteractionKind.Generic),
+                    new CompletionObjective(
+                        "sweep-kitchen",
+                        new LocationId("kitchen"),
+                        InteractionKind.LootContainer),
+                ]),
+            PlayerAiArchetype.Roleplayer => new PlayerAiProfile(entity, archetype),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(archetype),
+                archetype,
+                "Unknown archetype."),
+        };
+
+    /// <summary>
+    /// Who does what on this shift. Matches the roles in characters.json, which is
+    /// where this belongs once schedules move into content.
+    /// </summary>
+    private static readonly (EntityId Entity, RoleId Role)[] HotelRoles =
+    [
+        (BasementScenario.George, HotelNightRoutines.Receptionist),
+        (BasementScenario.Anna, HotelNightRoutines.Cleaner),
+        (BasementScenario.Bob, HotelNightRoutines.Security),
+        (BasementScenario.Charlie, HotelNightRoutines.Guest),
+        (BasementScenario.Dana, HotelNightRoutines.Cook),
+        (BasementScenario.Evelyn, HotelNightRoutines.Manager),
+    ];
+
+    private NpcRoutineProfile CreateRoutineProfile(
         EntityId entity,
         LocationId scheduleLocation)
     {
+        // With a truth in play the cast works a real night; without one they keep
+        // the flat Idle routine the scripted scenario was pinned against.
+        if (_options.Truth is not null)
+        {
+            RoleId assigned = HotelRoles
+                .FirstOrDefault(item => item.Entity == entity).Role;
+            if (!string.IsNullOrEmpty(assigned.Value))
+            {
+                return new NpcRoutineProfile(
+                    entity,
+                    HotelNightRoutines.Permissions(assigned),
+                    HotelNightRoutines.For(assigned),
+                    new NeedState(),
+                    HotelNeeds.Profile(),
+                    HotelNeeds.Destinations(assigned));
+            }
+        }
+
         var role = new RolePermissions(
             new RoleId("resident"),
             [BasementScenario.Lobby, BasementScenario.Basement]);

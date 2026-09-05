@@ -15,7 +15,11 @@ namespace Game.Client.Godot.Adapters;
 
 public sealed class BasementRealtimeAdapter
 {
-    private const double SecondsPerTick = 0.5;
+    // One in-game minute per tick. At 0.5s a whole night ran in three real
+    // minutes, which is long enough to see everything once and never long
+    // enough to change your mind - the loop of investigating, covering your
+    // tracks and investigating again needs several passes to read as a rhythm.
+    private const double SecondsPerTick = 1.5;
 
     private readonly BasementScenarioSession _session;
     private readonly HashSet<MovementRequestId> _dispatchedMovements = [];
@@ -101,6 +105,13 @@ public sealed class BasementRealtimeAdapter
     public SuspicionSnapshot GetSuspicion(EntityId observer, EntityId subject) =>
         _session.GetSuspicion(observer, subject);
 
+    public ExposureReport GetExposure(EntityId host) => _session.GetExposure(host);
+
+    public IReadOnlyList<AlibiClaim> Claims => _session.Claims;
+
+    public IReadOnlyList<Contradiction> FindContradictions(EntityId host) =>
+        _session.FindContradictions(host);
+
     public void Interact(EntityId actor, string interactionId) =>
         _session.Interact(actor, interactionId);
 
@@ -117,6 +128,9 @@ public sealed class BasementRealtimeAdapter
     public PlayerJournal GetPlayerJournal(EntityId? actor = null) => _session.GetPlayerJournal(actor);
 
     public NpcMovementExecution PlayerMove(LocationId destination) => _session.PlayerController.RequestMove(destination);
+
+    public NpcMovementExecution RequestNpcMove(EntityId actor, LocationId destination) =>
+        _session.RequestNpcMove(actor, destination);
 
     public void TogglePause() => IsPaused = !IsPaused;
 
