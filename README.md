@@ -42,6 +42,13 @@ Roadmap Phase 0–15 และ Post-MVP เขียนโค้ดครบแ�
 
 เดิมการสืบสวนไม่มีต้นทุน กลยุทธ์ที่ดีที่สุดคือ “ทำทุกอย่างให้ครบ” ซึ่งไม่ใช่การตัดสินใจ
 
+- **เล่นคืนแรกจริง (ก่อน Milestone 6):** เพิ่ม `--night-report` แล้วเดินครบคืนบน 15 seed
+ผลคือ **สองในสามเสาหลักไม่เคยทำงานในคืนปกติ** — exposure สูงสุด 0–14 จากเกณฑ์ 15 และคดี
+ที่โรงแรมมีต่อผู้เล่นสูงสุด 0–24 จากเกณฑ์ 90 ส่วนคืน "You Were The Player" กลับตรงข้าม:
+anomaly ครั้งเดียวดัน exposure ไป 60 และ coalition ไป 204–330 ทำให้ผู้เล่นถูกล้อมจับที่
+20–38% ของกะ **ฉากจบที่เพิ่งทำเสร็จจึงไปไม่ถึงเลย** รายละเอียดและข้อค้นพบที่เหลืออยู่ใน
+`playtest/first-night-findings.md` — ยังไม่แก้ตัวเลข เพราะเป็นการตัดสินใจด้านบาลานซ์
+ที่ควรตกลงก่อนลงมือ.
 - **ฉากจบ "You Were The Player" (Milestone 5):** เปิด `AllowHostAsHiddenPlayer` ในเกมจริง — ราวหนึ่งในหกคืน ตัวละครที่มนุษย์ขับคือคนที่ถูกบงการเสียเอง; หน้าสรุปคดีเพิ่มตัวเลือก “เอ่ยชื่อตัวเอง” และฉากจบแยกเป็นสามทางตาม `EndingKind` (`CorrectAccusation` / `FalseAccusation` / `YouWereThePlayer`). เมื่อ host เป็น hidden player **Player AI จะไม่ขับเขา** — นอกจากกันชนกับมนุษย์แล้ว ยังเป็นหัวใจของฉากนี้: พฤติกรรมแบบ Player ที่ทั้งโรงแรมตอบสนอง ต้องเป็นของมนุษย์เอง และ anomaly ก็เกิดกับ host ทำให้ Exposure กับ Closing Net มาบรรจบที่ผู้เล่นเอง โดยไม่ต้องสคริปต์เพิ่ม.
 - **Exposure — ผู้เล่นก็ถูกโลกสังเกต (§0.7 Deviation):** อ่าน suspicion pipeline กลับด้านโดยใช้ Human Host เป็น subject ผ่าน `ExposureReport` แล้วแสดงเป็นภาษาคน 4 ระดับ (`ยังไม่มีใครสนใจ → มีคนสังเกต → ถูกจับตา → จนมุม`) บน HUD, ข้างนาฬิกา, หน้า `คนอื่นมองคุณอย่างไร` ในแฟ้มคดี และ alert เมื่อระดับขยับขึ้น; มีราคาจริงคือคนที่จับได้จะตอบอย่างระมัดระวัง (Watched) และเลิกเล่าเรื่องคนอื่นให้ฟัง (Cornered) โดยคิดเป็นรายคน ไม่ใช่ค่ารวม จึงไม่ปิดทางเล่นทั้งหมด.
 - **Contradiction — จับโกหกได้:** การถามตารางงานทำให้ NPC ให้ `AlibiClaim` ที่ตรวจสอบได้ โดยคำตอบมาจากความทรงจำของเขาเอง และจะ**เลี่ยงพูดความจริงเมื่อความจริงคือห้องหวงห้าม** โดยกล่าวถึงห้องธรรมดาข้างเคียงแทน; `ContradictionFinder` เทียบคำให้การกับเบาะแสของผู้เล่น และการแย้งมีสองทาง: ถ้าคำให้การเท็จจะ `Cracked` และยอมบอกสิ่งที่เก็บไว้ แต่ถ้าคำให้การจริงจะ `Backfired` และ**เพิ่ม Exposure ของผู้กล่าวหาเอง** ทำให้เบาะแสที่เห็นเองกับที่ได้ยินต่อกันมามีน้ำหนักต่างกันจริง.
@@ -109,6 +116,18 @@ godot --editor --path src/Game.Client.Godot
 godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --smoke-2d
 godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --smoke-2d --thai
 ```
+
+เล่นหนึ่งคืนเต็มโดยไม่มีคนควบคุม แล้วบันทึกว่าเกมพูดอะไรกลับมาบ้างและตอนไหน:
+
+```bash
+godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --night-report night.md
+godot_console --headless --path src/Game.Client.Godot res://Scenes2D/Main2D.tscn -- --night-report night.md --night-seed 11
+```
+
+เครื่องมือนี้เดินบน client code path เดียวกับที่ผู้เล่นใช้ ด้วยพฤติกรรม “ผู้เล่นที่อยู่ตรงนั้นจริง”
+(ถาม–ดูของ–เดิน สลับกันทุก 9 นาทีในเกม) และเขียนตารางความหนาแน่นรายชั่วโมง, ช่วงที่เกม
+เงียบยาวที่สุด, จังหวะที่มิเตอร์แต่ละตัวขยับ และฉากจบที่ได้ ผลรอบแรกอยู่ใน
+`playtest/first-night-findings.md`
 
 การทดสอบสำเร็จเมื่อ process คืน exit code `0` และแสดง `HOTEL_2D_SMOKE_PASS` โดยครอบคลุม
 การโหลด content, แผนที่ 8 ห้อง, ตัวละคร 6 คน, click-to-move, movement acknowledgement,
@@ -2541,7 +2560,12 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 3. **Milestone 3 — Investigation UX (เสร็จระดับ playable vertical slice):** หน้าแรก/ตั้งค่า/onboarding, contextual character actions, Follow, Visual Novel dialogue, inspect, แฟ้มคดีแบบแบ่งหน้า, continuous-time night shift, Insight View, final accusation และ narrative aftermath ใช้งานได้แล้ว; เหลือ external playtest รอบใหม่เพื่อปรับ pacing/wording/เวลา.
 4. **Milestone 4 — Deterministic Case Generation (เสร็จแล้ว):** `SessionTruth` / `CaseGenerator` ใช้ PCG32 stream แยก (`RandomSequence = 7717`) จึงไม่เลื่อนลำดับสุ่มของ simulation; seed เดิมได้ case/trace เดิม และ replay ใช้ seed ใหม่จึงได้คดีใหม่ โดย hidden truth ไม่รั่วเข้า WorldEvent/Observation/Memory/Suspicion (บังคับด้วย `SessionTruthIsolationTests`). ยังเปิดทางเลือก `AllowHostAsHiddenPlayer` ไว้ให้ Milestone 5 เปิดตอนมีฉากจบ "You Were The Player".
 5. **Milestone 5 — Accusation & Endings (เสร็จแล้ว):** ฉากจบครบสามทางตาม `EndingKind` — Correct Accusation, False Accusation และ You Were The Player — โดยหน้าสรุปคดีเอ่ยชื่อตัวเองได้ และ seed เลือก host เป็น hidden player ได้ราว 1 ใน 6 คืน (`AllowHostAsHiddenPlayer` เปิดแล้ว); เหลือขยายเนื้อหาฉากจบตามผล playtest.
-6. **Milestone 6 — First Fun Playtest:** ทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding, suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent.
+6. **Milestone 6 — First Fun Playtest (เริ่มแล้ว):** เล่นคืนแรกภายในด้วย `--night-report`
+ครบ 15 seed และบันทึกผลไว้ที่ `playtest/first-night-findings.md`; ก่อนเชิญผู้ทดสอบภายนอก
+ต้องตัดสินใจเรื่องบาลานซ์ที่พบก่อน แล้วจึงทดสอบผู้เล่นใหม่ 3–5 คน วัด onboarding,
+suspect diversity, hypothesis changes, false-positive understanding, pacing และ replay intent
+โดย `playtest/protocol.md` ยังต้องเพิ่ม metric ของ Exposure / Contradiction / Closing Net
+และฉากจบสามทาง ซึ่งตอนนี้ยังไม่มีในตารางวัด.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
 8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 283/283 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
@@ -2569,6 +2593,9 @@ Incident Culprit         = ผู้ก่อเหตุ Basement ซึ่ง�
 - [x] เพิ่มฉากจบ You Were The Player ครบ Milestone 5
 - [ ] เก็บ external playtest เพื่อปรับ pacing, wording และ contextual action edge cases
 - [x] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
+- [x] เล่นคืนแรกภายในครบ 15 seed ด้วย `--night-report` และบันทึกผลไว้
+- [ ] ตัดสินใจเรื่องบาลานซ์จากผลคืนแรก (เกณฑ์ exposure, จังหวะ Closing Net, น้ำหนัก anomaly)
+- [ ] เพิ่ม metric ของ Exposure / Contradiction / Closing Net และฉากจบสามทางลงใน playtest protocol
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ
 

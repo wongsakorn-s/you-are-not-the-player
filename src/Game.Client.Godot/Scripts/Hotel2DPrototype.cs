@@ -3,7 +3,9 @@ using Game.Client.Godot.Configuration;
 using Game.Client.Godot.Gameplay;
 using Game.Client.Godot.Presentation;
 using Game.Client.Godot.World;
+using System.Globalization;
 using Game.Sim.Actions;
+using Game.Sim.Brain;
 using Game.Sim.Cases;
 using Game.Sim.Conspiracy;
 using Game.Sim.Entities;
@@ -131,6 +133,18 @@ public sealed partial class Hotel2DPrototype : Node2D
     private bool _captureEnabled;
     private int _captureFrames;
 
+    private const float NightReportSpeed = 12.0f;
+    private const int NightReportActionInterval = 9;
+
+    private NightReportRecorder? _nightReport;
+    private string _nightReportPath = "night-report.md";
+    private long _nightNextActionTick;
+    private float _nightPeakCoalitionScore;
+    private long _nightLastTick = -1;
+    private int _nightStalledFrames;
+    private bool _closingNetArmed;
+    private int _nightActionIndex;
+
     public override void _Ready()
     {
         _captureEnabled = OS.GetCmdlineUserArgs().Contains(
@@ -143,6 +157,21 @@ public sealed partial class Hotel2DPrototype : Node2D
             "--thai",
             StringComparer.OrdinalIgnoreCase) ||
             string.Equals(OS.GetLocaleLanguage(), "th", StringComparison.OrdinalIgnoreCase);
+
+        if (ReadUserArgument("--night-report") is string reportPath)
+        {
+            _nightReport = new NightReportRecorder();
+            _nightReportPath = reportPath;
+        }
+
+        if (ulong.TryParse(
+                ReadUserArgument("--night-seed"),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out ulong nightSeed))
+        {
+            _replaySeed = nightSeed;
+        }
 
         _hotel = LoadHotelDefinition();
         CharacterCatalogDefinition catalog = LoadCharacterCatalog();
@@ -188,7 +217,13 @@ public sealed partial class Hotel2DPrototype : Node2D
         RefreshContextActions();
         RefreshProgress();
         RefreshExposure();
-        if (!_smokeEnabled)
+        if (_nightReport is not null)
+        {
+            BeginInvestigation();
+            _simulation.SetSpeed(NightReportSpeed);
+            _worldAdapter.SetMovementSpeed(NightReportSpeed);
+        }
+        else if (!_smokeEnabled)
         {
             _simulation.SetPaused(true);
             _worldAdapter.SetMovementPaused(true);
@@ -244,6 +279,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         RunSmokeTest(delta);
+        RunNightReport();
         RunCapture();
     }
 
@@ -890,6 +926,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             return;
         }
 
+        _nightReport?.Told(beat.Tick, T(beat.EnglishText, beat.ThaiText));
         _alertPanel.Visible = true;
         _alertLabel.Visible = true;
         _alertLabel.Text = $"◆  {T(beat.EnglishText, beat.ThaiText)}";
@@ -2066,6 +2103,7 @@ public sealed partial class Hotel2DPrototype : Node2D
         // quietly misreport the danger.
         bool armed = coalition.ConsensusReached &&
             coalition.CombinedSuspicionScore >= ClosingNetThreshold;
+        _closingNetArmed = armed;
         if (!armed)
         {
             return;
@@ -2104,20 +2142,31 @@ public sealed partial class Hotel2DPrototype : Node2D
 
     private void AnnounceCoalition(AccusationCoalition coalition)
     {
-        string who = string.Join(", ", coalition.Members
-            .Where(member => member != _humanHost)
-            .Select(DisplayName)
-            .OrderBy(name => name, StringComparer.CurrentCulture));
+        string[] names =
+        [
+            .. coalition.Members
+                .Where(member => member != _humanHost)
+                .Select(DisplayName)
+                .OrderBy(name => name, StringComparer.CurrentCulture),
+        ];
+        string who = string.Join(", ", names);
+
+        // A coalition of one is the common case early on, and "Anna were talking
+        // quietly" is the kind of line that tells a playtester they are reading
+        // generated text rather than being spoken to.
+        bool several = names.Length > 1;
         (string english, string thai) = coalition.Stage switch
         {
             CoalitionStage.ConsensusReached => (
-                $"{who} have stopped comparing notes. They have agreed on something.",
+                $"{who} {(several ? "have" : "has")} stopped comparing notes. " +
+                    "They have agreed on something.",
                 $"{who} หยุดเทียบข้อมูลกันแล้ว พวกเขาตกลงอะไรบางอย่างได้"),
             CoalitionStage.Confronting => (
-                $"{who} are coming to find you.",
+                $"{who} {(several ? "are" : "is")} coming to find you.",
                 $"{who} กำลังเดินมาหาคุณ"),
             _ => (
-                $"{who} were talking quietly. They stopped when you came in.",
+                $"{who} {(several ? "were" : "was")} talking quietly. " +
+                    "They stopped when you came in.",
                 $"{who} คุยกันเบา ๆ แล้วเงียบลงตอนคุณเดินเข้ามา"),
         };
 
@@ -3037,6 +3086,227 @@ public sealed partial class Hotel2DPrototype : Node2D
         }
 
         HandleSimulationChanges();
+    }
+
+    private static string? ReadUserArgument(string name) => OS.GetCmdlineUserArgs()
+        .SkipWhile(argument => !string.Equals(argument, name, StringComparison.OrdinalIgnoreCase))
+        .Skip(1)
+        .FirstOrDefault();
+
+    /// <summary>
+    /// Plays one night unattended and writes down what the game said back.
+    /// </summary>
+    /// <remarks>
+    /// Milestone 6 asks whether the night is worth playing, and every pacing
+    /// number in it — the nine-minute shift, the exposure thresholds, the
+    /// coalition score — had been calculated and never watched. This walks the
+    /// hotel on the real client code path, so the answer comes off a run
+    /// instead of off a constant.
+    /// </remarks>
+    private void RunNightReport()
+    {
+        if (_nightReport is null || _simulation is null)
+        {
+            return;
+        }
+
+        AccusationCoalition? against = _simulation.EvaluateConspiracy(_humanHost);
+        if (against is not null && against.Target == _humanHost)
+        {
+            _nightPeakCoalitionScore = Math.Max(
+                _nightPeakCoalitionScore,
+                against.CombinedSuspicionScore);
+        }
+
+        _nightReport.Observe(
+            _simulation.CurrentTick,
+            _simulation.GetExposure(_humanHost),
+            _simulation.GetPlayerJournal(_humanHost).Entries.Count,
+            _simulation.Claims.Count,
+            _simulation.FindContradictions(_humanHost).Count,
+            _closingNetArmed);
+
+        if (_gameEnded)
+        {
+            WriteNightReport();
+            return;
+        }
+
+        // The hotel got there first: the night ends on their terms, not on an
+        // accusation. A player would answer this screen, so the report does too.
+        if (_climaxOpen)
+        {
+            _nightReport.Told(
+                _simulation.CurrentTick,
+                "they cornered you before dawn — answering with a denial");
+            ResolveClimaxChoice(PlayerClimaxChoice.DenyAndCounter);
+            return;
+        }
+
+        // A night that stops advancing is worse than a boring one, and the clock
+        // stopping is the only symptom a player would ever see.
+        if (_simulation.CurrentTick == _nightLastTick)
+        {
+            _nightStalledFrames++;
+            if (_nightStalledFrames > 900)
+            {
+                _nightReport.Told(
+                    _simulation.CurrentTick,
+                    $"STALLED — the clock stopped at tick {_simulation.CurrentTick} " +
+                    $"in phase {_simulation.Phase}, complete={_simulation.IsComplete}");
+                WriteNightReport();
+            }
+
+            return;
+        }
+
+        _nightLastTick = _simulation.CurrentTick;
+        _nightStalledFrames = 0;
+
+        if (_deductionOpen)
+        {
+            EntityId suspect = TopSuspect();
+            _nightReport.Action(_simulation.CurrentTick, $"accuses {DisplayName(suspect)}");
+            EndingKind ending = ClassifyEnding(suspect);
+            ResolveFinalDeduction(suspect);
+            _nightReport.Told(_simulation.CurrentTick, $"ending: {ending}");
+            return;
+        }
+
+        if (_simulation.CurrentTick >= _nightNextActionTick)
+        {
+            _nightNextActionTick = _simulation.CurrentTick + NightReportActionInterval;
+            TakeNightAction();
+        }
+    }
+
+    /// <summary>
+    /// A present player rather than a good one: ask whoever is here to account
+    /// for themselves, look at what is in the room, walk somewhere connected.
+    /// If there is nothing here for someone doing all three, there is nothing
+    /// here for someone doing them well.
+    /// </summary>
+    private void TakeNightAction()
+    {
+        if (_simulation is null || _nightReport is null)
+        {
+            return;
+        }
+
+        long tick = _simulation.CurrentTick;
+        _nightActionIndex++;
+        EntityId partner = _simulation.PlayerController.GetPresentActors()
+            .FirstOrDefault(actor => actor != _humanHost);
+        IReadOnlyList<InteractiveObject> here = _simulation.GetPresentObjects();
+        InteractiveObject? nearby = here.Count > 0 ? here[0] : null;
+        switch (_nightActionIndex % 3)
+        {
+            case 0 when !partner.IsEmpty:
+                DialogueOutcome asked = _simulation.Talk(new DialogueRequest(
+                    DialogueActionKind.InquireSchedule,
+                    _humanHost,
+                    partner));
+                _nightReport.Action(
+                    tick,
+                    $"asks {DisplayName(partner)} to account for their shift — " +
+                    (!asked.Succeeded
+                        ? "refused"
+                        : asked.Claim is null ? "answered, nothing checkable" : "claim on record"));
+                break;
+
+            case 1 when nearby is not null:
+                ObjectActionResult looked = _simulation.InspectObject(nearby.Id);
+                _nightReport.Action(
+                    tick,
+                    $"looks at {DisplayObject(nearby)} — " +
+                    (looked.Succeeded ? "something to note" : "nothing"));
+                break;
+
+            default:
+                IReadOnlyList<LocationId> adjacent =
+                    _simulation.GetPlayerJournal(_humanHost).AdjacentLocations;
+                if (adjacent.Count > 0)
+                {
+                    LocationId destination = adjacent[(int)(tick % adjacent.Count)];
+                    _nightReport.Action(tick, $"walks to {DisplayLocation(destination, useThai: false)}");
+                    ExecutePlayerMove(destination);
+                }
+
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Who the case file itself points at, so the ending on the report is the
+    /// one the game argued for rather than one read off the hidden truth.
+    /// </summary>
+    private EntityId TopSuspect()
+    {
+        EntityId best = _characters.Keys.First(actor => actor != _humanHost);
+        if (_simulation is null)
+        {
+            return best;
+        }
+
+        float bestScore = float.MinValue;
+        foreach (SuspicionSnapshot snapshot in
+            _simulation.GetPlayerJournal(_humanHost).SuspicionSnapshots)
+        {
+            if (snapshot.Subject == _humanHost)
+            {
+                continue;
+            }
+
+            float total = snapshot.Vector.Criminality +
+                snapshot.Vector.Secrecy +
+                snapshot.Vector.RoleDeviation +
+                snapshot.Vector.MetaBehavior +
+                snapshot.Vector.ImpossibleBehavior +
+                snapshot.Vector.Deception;
+            if (total > bestScore)
+            {
+                bestScore = total;
+                best = snapshot.Subject;
+            }
+        }
+
+        return best;
+    }
+
+    private void WriteNightReport()
+    {
+        if (_nightReport is null || _simulation is null || _truth is null)
+        {
+            return;
+        }
+
+        PlayerJournal journal = _simulation.GetPlayerJournal(_humanHost);
+        int idle = _simulation.Decisions.Count(
+            decision => decision.Goal.Type == GoalType.Idle);
+        string[] header =
+        [
+            $"seed {_truth.Seed}",
+            "hidden player: " + _truth.HiddenPlayer.Value +
+                (_truth.HostIsHiddenPlayer ? " — the host, so this was a You Were The Player night" : string.Empty),
+            $"clues in the case file at dawn: {journal.Entries.Count}",
+            $"statements on record: {_simulation.Claims.Count}",
+            $"contradictions still catchable at dawn: {_simulation.FindContradictions(_humanHost).Count}",
+            $"peak exposure: {_nightReport.PeakExposure:F0} of {ExposureReport.NoticedThreshold:F0} needed to be noticed at all",
+            $"peak case against you: {_nightPeakCoalitionScore:F0} of {ClosingNetThreshold:F0} needed before the hotel moves",
+            $"world events: {_simulation.Events.Count}",
+            $"npc decisions: {_simulation.Decisions.Count} ({(_simulation.Decisions.Count == 0 ? 0 : idle * 100 / _simulation.Decisions.Count)}% idle)",
+        ];
+
+        string report = _nightReport.Build(header, ClockText, NightShiftDirector.DeadlineTick) +
+            System.Environment.NewLine +
+            "## People to watch, as the case file put it at dawn" +
+            System.Environment.NewLine +
+            System.Environment.NewLine +
+            JournalPresentationFormatter.FormatPeopleToWatch(journal, DisplayName, useThai: false) +
+            System.Environment.NewLine;
+        File.WriteAllText(_nightReportPath, report);
+        GD.Print($"HOTEL_2D_NIGHT_REPORT {_nightReportPath}");
+        GetTree().Quit(0);
     }
 
     private void RunSmokeTest(double delta)
