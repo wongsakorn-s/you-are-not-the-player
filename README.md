@@ -16,7 +16,7 @@ Roadmap Phase 0–15 และ Post-MVP เขียนโค้ดครบแ�
 
 ส่วนที่พิสูจน์แล้วว่าทำงานถูกต้องและรันซ้ำได้ด้วย seed เดียวกัน
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 283/283 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 285/285 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Sim Clock ตรงกับนาฬิกาของเกม:** เดิม `SimClock.TimeOfDay` คิดว่า 1 tick = ¼ วินาที (240 ticks = 1 นาที) ขณะที่ HUD คิดว่า 1 tick = 1 นาที ตารางจึงค้างที่ 00:00 ทั้งคืน; เพิ่ม `startOfDay` กับ `ticksPerMinute` โดย session ส่ง 23:00 กับ 1 เมื่อมี `SessionTruth`.
@@ -47,8 +47,16 @@ Roadmap Phase 0–15 และ Post-MVP เขียนโค้ดครบแ�
 ที่โรงแรมมีต่อผู้เล่นสูงสุด 0–24 จากเกณฑ์ 90 ส่วนคืน "You Were The Player" กลับตรงข้าม:
 anomaly ครั้งเดียวดัน exposure ไป 60 และ coalition ไป 204–330 ทำให้ผู้เล่นถูกล้อมจับที่
 20–38% ของกะ **ฉากจบที่เพิ่งทำเสร็จจึงไปไม่ถึงเลย** รายละเอียดและข้อค้นพบที่เหลืออยู่ใน
-`playtest/first-night-findings.md` — ยังไม่แก้ตัวเลข เพราะเป็นการตัดสินใจด้านบาลานซ์
-ที่ควรตกลงก่อนลงมือ.
+`playtest/first-night-findings.md`.
+- **ปรับบาลานซ์จากคืนที่เล่นจริง:** บันได exposure เป็น 12 / 70 / 130 (เดิม 15 / 40 / 80) —
+ขั้นล่างต่ำกว่าน้ำหนักของการทิ้งเคาน์เตอร์ (14.4) ซึ่งเดิมพลาดเกณฑ์ไปแค่ 0.6 และขั้นบนสูงกว่า
+anomaly หนึ่งครั้ง (60) ที่เดิมข้ามสองขั้นรวด; `roleNeglectCount` 3 → 2 ให้การทิ้งหน้าที่ไปสืบ
+มีราคาจริง; Closing Net ไม่ลงมือก่อน 60% ของกะ; แฟ้มคดีเลิกเขียนข้อสรุป
+("acting aware of being controlled") แล้วบอกสิ่งที่เห็นแทน; anomaly ที่เกิดกับผู้เล่นเองไม่ถูก
+ข้ามอีกต่อไป; และคำสารภาพในฉาก climax เลิกยืนยันว่า "คุณคือ Player" ทุกคืน — มันผิดใน 13 จาก
+15 คืน **ผลวัดซ้ำ: มิเตอร์ขึ้นบนจอ 14 จาก 15 คืน (เดิม 0), คืนของผู้เล่นเองถูกล้อมจับที่ 72%
+ของกะแทน 20–38% พร้อมเบาะแส 28–29 ชิ้นแทน 5–11 ชิ้น และฉากจบ You Were The Player
+ไปถึงได้แล้ว** โดย fingerprint ทั้งสี่ยังตรึงเท่าเดิม.
 - **ฉากจบ "You Were The Player" (Milestone 5):** เปิด `AllowHostAsHiddenPlayer` ในเกมจริง — ราวหนึ่งในหกคืน ตัวละครที่มนุษย์ขับคือคนที่ถูกบงการเสียเอง; หน้าสรุปคดีเพิ่มตัวเลือก “เอ่ยชื่อตัวเอง” และฉากจบแยกเป็นสามทางตาม `EndingKind` (`CorrectAccusation` / `FalseAccusation` / `YouWereThePlayer`). เมื่อ host เป็น hidden player **Player AI จะไม่ขับเขา** — นอกจากกันชนกับมนุษย์แล้ว ยังเป็นหัวใจของฉากนี้: พฤติกรรมแบบ Player ที่ทั้งโรงแรมตอบสนอง ต้องเป็นของมนุษย์เอง และ anomaly ก็เกิดกับ host ทำให้ Exposure กับ Closing Net มาบรรจบที่ผู้เล่นเอง โดยไม่ต้องสคริปต์เพิ่ม.
 - **Exposure — ผู้เล่นก็ถูกโลกสังเกต (§0.7 Deviation):** อ่าน suspicion pipeline กลับด้านโดยใช้ Human Host เป็น subject ผ่าน `ExposureReport` แล้วแสดงเป็นภาษาคน 4 ระดับ (`ยังไม่มีใครสนใจ → มีคนสังเกต → ถูกจับตา → จนมุม`) บน HUD, ข้างนาฬิกา, หน้า `คนอื่นมองคุณอย่างไร` ในแฟ้มคดี และ alert เมื่อระดับขยับขึ้น; มีราคาจริงคือคนที่จับได้จะตอบอย่างระมัดระวัง (Watched) และเลิกเล่าเรื่องคนอื่นให้ฟัง (Cornered) โดยคิดเป็นรายคน ไม่ใช่ค่ารวม จึงไม่ปิดทางเล่นทั้งหมด.
 - **Contradiction — จับโกหกได้:** การถามตารางงานทำให้ NPC ให้ `AlibiClaim` ที่ตรวจสอบได้ โดยคำตอบมาจากความทรงจำของเขาเอง และจะ**เลี่ยงพูดความจริงเมื่อความจริงคือห้องหวงห้าม** โดยกล่าวถึงห้องธรรมดาข้างเคียงแทน; `ContradictionFinder` เทียบคำให้การกับเบาะแสของผู้เล่น และการแย้งมีสองทาง: ถ้าคำให้การเท็จจะ `Cracked` และยอมบอกสิ่งที่เก็บไว้ แต่ถ้าคำให้การจริงจะ `Backfired` และ**เพิ่ม Exposure ของผู้กล่าวหาเอง** ทำให้เบาะแสที่เห็นเองกับที่ได้ยินต่อกันมามีน้ำหนักต่างกันจริง.
@@ -2502,7 +2510,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Automated tests ผ่าน (283/283 tests passed)
+- [x] Automated tests ผ่าน (285/285 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2567,7 +2575,7 @@ suspect diversity, hypothesis changes, false-positive understanding, pacing แ�
 โดย `playtest/protocol.md` ยังต้องเพิ่ม metric ของ Exposure / Contradiction / Closing Net
 และฉากจบสามทาง ซึ่งตอนนี้ยังไม่มีในตารางวัด.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 283/283 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 285/285 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 
@@ -2594,7 +2602,8 @@ suspect diversity, hypothesis changes, false-positive understanding, pacing แ�
 - [ ] เก็บ external playtest เพื่อปรับ pacing, wording และ contextual action edge cases
 - [x] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
 - [x] เล่นคืนแรกภายในครบ 15 seed ด้วย `--night-report` และบันทึกผลไว้
-- [ ] ตัดสินใจเรื่องบาลานซ์จากผลคืนแรก (เกณฑ์ exposure, จังหวะ Closing Net, น้ำหนัก anomaly)
+- [x] ปรับบาลานซ์จากผลคืนแรก (เกณฑ์ exposure, จังหวะ Closing Net, ถ้อยคำที่เฉลยคำตอบ) แล้ววัดซ้ำ
+- [ ] แก้ให้การอนุมานจากเบาะแสธรรมดาชี้ถูกคนโดยไม่ต้องพึ่ง anomaly
 - [ ] เพิ่ม metric ของ Exposure / Contradiction / Closing Net และฉากจบสามทางลงใน playtest protocol
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ

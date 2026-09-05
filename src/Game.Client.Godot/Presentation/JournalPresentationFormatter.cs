@@ -345,8 +345,11 @@ public static class JournalPresentationFormatter
             (snapshot.Vector.Secrecy, useThai ? "ปกปิดข้อมูล" : "hiding information"),
             (snapshot.Vector.RoleDeviation, useThai ? "ไม่ทำตามหน้าที่" : "acting outside their role"),
             (snapshot.Vector.Deception, useThai ? "คำพูดไม่น่าไว้ใจ" : "untrustworthy statements"),
-            (snapshot.Vector.ImpossibleBehavior, useThai ? "พฤติกรรมเป็นไปไม่ได้" : "impossible behavior"),
-            (snapshot.Vector.MetaBehavior, useThai ? "ตอบสนองเหมือนรู้ว่าถูกควบคุม" : "acting aware of being controlled"),
+            // What was seen, not what it means. "Acting aware of being controlled"
+            // is the answer to the question the player is being asked, printed on
+            // the page that is supposed to be their working notes.
+            (snapshot.Vector.ImpossibleBehavior, useThai ? "อยู่ในที่ที่ไปไม่ถึง" : "was somewhere they could not have reached"),
+            (snapshot.Vector.MetaBehavior, useThai ? "ตอบสนองต่อสิ่งที่ไม่มีใครพูด" : "answered something nobody said"),
             (snapshot.Vector.Criminality, useThai ? "เกี่ยวข้องกับการกระทำผิด" : "possible wrongdoing"),
         };
         return string.Join(

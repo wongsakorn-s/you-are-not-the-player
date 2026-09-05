@@ -960,9 +960,23 @@ public sealed partial class Hotel2DPrototype : Node2D
     {
         if (_simulation is null ||
             _gameEnded ||
-            worldEvent.Type != EventType.RealityAnomaly ||
-            worldEvent.Actor == _humanHost)
+            worldEvent.Type != EventType.RealityAnomaly)
         {
+            return;
+        }
+
+        // It can happen to the host, and on those nights it only ever happens to
+        // the host. Skipping it left the one night the whole premise points at
+        // with no tell at all.
+        if (worldEvent.Actor == _humanHost)
+        {
+            ShowShiftAlert(new ShiftBeat(
+                _simulation.CurrentTick,
+                ShiftBeatKind.ImpossibleFootsteps,
+                "You were at the other end of the room a moment ago. You do not " +
+                    "remember deciding to walk.",
+                "เมื่อครู่ก่อนคุณอยู่อีกฟากหนึ่งของห้อง " +
+                    "แต่คุณจำไม่ได้ว่าตัดสินใจเดินตอนไหน"));
             return;
         }
 
@@ -977,8 +991,10 @@ public sealed partial class Hotel2DPrototype : Node2D
         ShowShiftAlert(new ShiftBeat(
             _simulation.CurrentTick,
             ShiftBeatKind.ImpossibleFootsteps,
-            $"Something about {who} just happened that cannot have happened.",
-            $"มีบางอย่างเกี่ยวกับ{who} เพิ่งเกิดขึ้นทั้งที่มันเกิดขึ้นไม่ได้"));
+            $"{who} was across the room. Now {who} is beside you, and nothing " +
+                "crossed the space between.",
+            $"{who}อยู่อีกฟากห้อง ตอนนี้{who}อยู่ข้างคุณ " +
+                "โดยไม่มีอะไรเคลื่อนผ่านช่องว่างนั้นเลย"));
     }
 
     private void RefreshEventFeed()
@@ -2069,6 +2085,18 @@ public sealed partial class Hotel2DPrototype : Node2D
     private const long ConfrontationGraceTicks = 45;
 
     /// <summary>
+    /// The earliest point in the shift the hotel will move on the host.
+    /// </summary>
+    /// <remarks>
+    /// On a night where the host is the one being steered, the anomalies land on
+    /// them and the case is over the bar within half an hour of clocking in - two
+    /// played nights ended at 20% and 38% of the shift, with five and eleven clues
+    /// in hand, and the ending the night exists for was never reachable. A case
+    /// can build all night; the confrontation belongs in the last act.
+    /// </remarks>
+    private const long ConfrontationEarliestTick = NightShiftDirector.DeadlineTick * 3 / 5;
+
+    /// <summary>
     /// Combined concern across the coalition needed before it will move. Two
     /// witnesses to one restricted-area entry score roughly 56 between them, so
     /// this takes a pattern rather than a single mistake.
@@ -2109,8 +2137,16 @@ public sealed partial class Hotel2DPrototype : Node2D
             return;
         }
 
-        _confrontationTick ??= _simulation.CurrentTick + ConfrontationGraceTicks;
+        _confrontationTick ??= Math.Max(_simulation.CurrentTick, ConfrontationEarliestTick) +
+            ConfrontationGraceTicks;
         long remaining = _confrontationTick.Value - _simulation.CurrentTick;
+        if (remaining > ConfrontationGraceTicks)
+        {
+            // Armed early. The exposure meter carries the dread until they are
+            // actually coming - a countdown running for four hours is furniture.
+            return;
+        }
+
         if (remaining > 0)
         {
             // Runs after RefreshExposure, so this appends to the line it just wrote.
@@ -2227,6 +2263,11 @@ public sealed partial class Hotel2DPrototype : Node2D
         _hasConcluded = true;
         RefreshProgress();
         ClimaxResolution resolution = _simulation.ResolveClimax(choice, _humanHost);
+        if (choice == PlayerClimaxChoice.ConfessReality)
+        {
+            ShowConfession();
+            return;
+        }
 
         // The player never got to make an accusation, so the case file cannot
         // close. What the night leaves behind is what they did when it was their
@@ -2242,6 +2283,64 @@ public sealed partial class Hotel2DPrototype : Node2D
                 new InvestigationChoice(
                     T("BACK TO TITLE", "กลับหน้าแรก"),
                     ReturnToTitle),
+            ],
+            allowClose: false);
+    }
+
+    /// <summary>
+    /// Saying "it was me" with five people blocking the door is the same claim as
+    /// saying it on the deduction screen, so it resolves against the same truth.
+    /// </summary>
+    /// <remarks>
+    /// The simulation cannot make this call - it is kept from knowing which
+    /// character the seed put behind the Player, which is what stops the answer
+    /// leaking into events and memories. So its own confession text asserts "you
+    /// are The Player" on every night, including the thirteen in fifteen where
+    /// that is simply untrue. The client knows, and answers here.
+    /// </remarks>
+    private void ShowConfession()
+    {
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        bool wasTrue = ClassifyEnding(_humanHost) == EndingKind.YouWereThePlayer;
+        string clue = DescribeMostRelevantClue(_simulation.GetPlayerJournal(_humanHost));
+        string body = wasTrue
+            ? T(
+                "George says it before they can. \"It's me. I'm the one you have " +
+                    "been looking for.\"\n\nNobody moves. He has been reading the " +
+                    "night for hours and every line of it kept arriving back here:\n" +
+                    clue + "\n\nThe hand that opened the basement door was on the " +
+                    "end of his own arm. He simply had not been the one deciding " +
+                    "when it moved.\n\nThey let him go. There is nothing in the " +
+                    "ledger to hold a man for being steered.",
+                "จอร์จพูดออกไปก่อนที่พวกเขาจะทัน “ผมเอง ผมคือคนที่พวกคุณตามหา”\n\n" +
+                    "ไม่มีใครขยับ เขาอ่านคืนนี้มาหลายชั่วโมง และทุกเส้นทางย้อนกลับมาที่เดิม:\n" +
+                    clue + "\n\nมือที่เปิดประตูชั้นใต้ดินอยู่ปลายแขนของเขาเอง " +
+                    "เพียงแต่เขาไม่ใช่คนที่ตัดสินใจว่ามันจะขยับเมื่อไร\n\n" +
+                    "พวกเขาปล่อยเขาไป เพราะในบันทึกไม่มีข้อหาสำหรับคนที่ถูกบงการ")
+            : T(
+                "George says it before they can. \"It's me. I'm the one you have " +
+                    "been looking for.\"\n\nThey believe him. It is easier than " +
+                    "what they had been thinking, and it ends the night.\n\n" +
+                    "What he stopped looking at:\n" + clue + "\n\nSomewhere behind " +
+                    "them a door that should be locked opens quietly. Whoever is " +
+                    "really being steered watches him take it, and goes back to work.",
+                "จอร์จพูดออกไปก่อนที่พวกเขาจะทัน “ผมเอง ผมคือคนที่พวกคุณตามหา”\n\n" +
+                    "พวกเขาเชื่อ เพราะมันง่ายกว่าสิ่งที่กำลังคิดกันอยู่ และมันทำให้คืนนี้จบลง\n\n" +
+                    "สิ่งที่เขาเลิกมองไป:\n" + clue + "\n\nที่ไหนสักแห่งข้างหลังพวกเขา " +
+                    "ประตูที่ควรถูกล็อกเปิดออกอย่างเงียบ ๆ คนที่ถูกบงการจริง ๆ " +
+                    "มองเขารับไปแทน แล้วกลับไปทำงานต่อ");
+
+        ShowInvestigationScreen(
+            wasTrue ? T("IT WAS YOU", "คนนั้นคือคุณ") : T("THEY BELIEVED YOU", "พวกเขาเชื่อคุณ"),
+            body,
+            new Color(wasTrue ? "c9a0ff" : "e06c75"),
+            [
+                new InvestigationChoice(T("REPLAY THE NIGHT", "เล่นกะคืนนี้ใหม่"), RestartShift),
+                new InvestigationChoice(T("BACK TO TITLE", "กลับหน้าแรก"), ReturnToTitle),
             ],
             allowClose: false);
     }
@@ -3136,10 +3235,17 @@ public sealed partial class Hotel2DPrototype : Node2D
         // accusation. A player would answer this screen, so the report does too.
         if (_climaxOpen)
         {
+            // Cornered by people who all saw you do something impossible, the
+            // two honest answers are to deny it or to say it. Saying it is the
+            // one that has to resolve against the truth, so that is the one the
+            // report walks.
             _nightReport.Told(
                 _simulation.CurrentTick,
-                "they cornered you before dawn — answering with a denial");
-            ResolveClimaxChoice(PlayerClimaxChoice.DenyAndCounter);
+                "they cornered you before dawn — you said it was you, and it was " +
+                    (ClassifyEnding(_humanHost) == EndingKind.YouWereThePlayer
+                        ? "true"
+                        : "false"));
+            ResolveClimaxChoice(PlayerClimaxChoice.ConfessReality);
             return;
         }
 
@@ -3273,6 +3379,27 @@ public sealed partial class Hotel2DPrototype : Node2D
         return best;
     }
 
+    // Which rules actually fired on the host, so tuning the meter is a matter of
+    // reading rather than guessing which one produced a number.
+    private string DescribeExposureReasons()
+    {
+        if (_simulation is null)
+        {
+            return "nothing";
+        }
+
+        IReadOnlyList<ExposureReason> reasons = _simulation.GetExposure(_humanHost).Reasons;
+        if (reasons.Count == 0)
+        {
+            return "nothing";
+        }
+
+        return string.Join(", ", reasons
+            .GroupBy(reason => reason.RuleId, StringComparer.Ordinal)
+            .OrderByDescending(group => group.Sum(reason => reason.Weight))
+            .Select(group => $"{group.Key} x{group.Count()} ({group.Sum(r => r.Weight):F0})"));
+    }
+
     private void WriteNightReport()
     {
         if (_nightReport is null || _simulation is null || _truth is null)
@@ -3295,6 +3422,10 @@ public sealed partial class Hotel2DPrototype : Node2D
             $"peak case against you: {_nightPeakCoalitionScore:F0} of {ClosingNetThreshold:F0} needed before the hotel moves",
             $"world events: {_simulation.Events.Count}",
             $"npc decisions: {_simulation.Decisions.Count} ({(_simulation.Decisions.Count == 0 ? 0 : idle * 100 / _simulation.Decisions.Count)}% idle)",
+            "what the hotel has on you: " + DescribeExposureReasons(),
+            "duty lapses recorded against you: " + _simulation.Events.Count(
+                worldEvent => worldEvent.Type == EventType.RoleDutyMissed &&
+                    worldEvent.Actor == _humanHost),
         ];
 
         string report = _nightReport.Build(header, ClockText, NightShiftDirector.DeadlineTick) +

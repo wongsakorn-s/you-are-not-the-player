@@ -15,16 +15,24 @@ namespace Game.Sim.Player;
 public sealed class ExposureReport
 {
     /// <summary>
-    /// Thresholds are expressed against the suspicion rules that can fire on a
-    /// human: one restricted-area entry scores 28, a loot sweep 50, boundary
-    /// testing 40. So a single slip reads as Noticed, a slip plus a sweep reads
-    /// as Watched, and it takes a genuine pattern to reach Cornered.
+    /// Set from a played night rather than from the rule table. Weighted, the
+    /// things that can happen to a host are: one confirmed absence from your post
+    /// 14, one restricted-area entry 15, a loot sweep 44, one reality anomaly 60.
     /// </summary>
-    public const float NoticedThreshold = 15.0f;
+    /// <remarks>
+    /// The first bar sits below a single absence on purpose - fifteen nights were
+    /// played with it above, and the meter never once left Unnoticed, because the
+    /// only thing an investigating player reliably does scored 14.4. The upper
+    /// bars sit above a single anomaly for the opposite reason: one impossible
+    /// thing used to clear two tiers in one step, which turned the whole ladder
+    /// into an on-off switch. Now one gets you looked at, two gets you watched,
+    /// and it takes a run of them to corner you.
+    /// </remarks>
+    public const float NoticedThreshold = 12.0f;
 
-    public const float WatchedThreshold = 40.0f;
+    public const float WatchedThreshold = 70.0f;
 
-    public const float CorneredThreshold = 80.0f;
+    public const float CorneredThreshold = 130.0f;
 
     public ExposureReport(
         EntityId host,

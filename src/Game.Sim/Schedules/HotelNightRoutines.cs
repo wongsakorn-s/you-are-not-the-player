@@ -156,9 +156,11 @@ public static class HotelNightRoutines
         lootSweepWindowSeconds: 60,
         repeatInteractionCount: 4,
         repeatInteractionWindowSeconds: 45,
-        // Three separate absences inside three hours is a pattern; across the
-        // whole night it is just a long shift.
-        roleNeglectCount: 3,
+        // Two separate absences inside three hours is a pattern. Three was
+        // enough to make the front desk free: a night of investigating produces
+        // five lapses and converted about one of them, so leaving your post cost
+        // nothing on most nights.
+        roleNeglectCount: 2,
         roleNeglectWindowSeconds: 180,
         boundaryTestingDistinctProbes: 3,
         boundaryTestingWindowSeconds: 45);

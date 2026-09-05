@@ -29,17 +29,41 @@ public sealed class ExposureReportTests
 
     [Theory]
     [InlineData(0.0f, ExposureLevel.Unnoticed)]
-    [InlineData(14.9f, ExposureLevel.Unnoticed)]
-    [InlineData(15.0f, ExposureLevel.Noticed)]
-    [InlineData(39.9f, ExposureLevel.Noticed)]
-    [InlineData(40.0f, ExposureLevel.Watched)]
-    [InlineData(79.9f, ExposureLevel.Watched)]
-    [InlineData(80.0f, ExposureLevel.Cornered)]
+    [InlineData(ExposureReport.NoticedThreshold - 0.1f, ExposureLevel.Unnoticed)]
+    [InlineData(ExposureReport.NoticedThreshold, ExposureLevel.Noticed)]
+    [InlineData(ExposureReport.WatchedThreshold - 0.1f, ExposureLevel.Noticed)]
+    [InlineData(ExposureReport.WatchedThreshold, ExposureLevel.Watched)]
+    [InlineData(ExposureReport.CorneredThreshold - 0.1f, ExposureLevel.Watched)]
+    [InlineData(ExposureReport.CorneredThreshold, ExposureLevel.Cornered)]
     public void LevelFollowsTheMostConvincedObserver(float score, ExposureLevel expected)
     {
         ExposureReport report = WithObservers((Anna, score));
 
         Assert.Equal(expected, report.Level);
+    }
+
+    [Fact]
+    public void OneAbsenceFromYourPostIsEnoughToBeNoticedAndNotEnoughToBeWatched()
+    {
+        // The measured weight of a single confirmed RoleNeglect pattern. Fifteen
+        // played nights sat at exactly this number and read as Unnoticed, which
+        // meant the only pressure an investigating player generates was invisible.
+        ExposureReport report = WithObservers((Anna, 14.4f));
+
+        Assert.Equal(ExposureLevel.Noticed, report.Level);
+    }
+
+    [Fact]
+    public void OneImpossibleThingDoesNotSkipATier()
+    {
+        // A blink anomaly weighs 60. It used to clear Noticed and Watched in a
+        // single step, so the ladder behaved like a switch and the nights where
+        // anomalies land on the host ended before they had started.
+        ExposureReport oneAnomaly = WithObservers((Anna, 60.0f));
+        ExposureReport twoAnomalies = WithObservers((Anna, 120.0f));
+
+        Assert.Equal(ExposureLevel.Noticed, oneAnomaly.Level);
+        Assert.Equal(ExposureLevel.Watched, twoAnomalies.Level);
     }
 
     [Fact]
@@ -58,7 +82,9 @@ public sealed class ExposureReportTests
     {
         // The person who caught you gets guarded; everyone else still talks. This
         // keeps exposure a price rather than a wall.
-        ExposureReport report = WithObservers((Anna, 95.0f), (Bob, 5.0f));
+        ExposureReport report = WithObservers(
+            (Anna, ExposureReport.CorneredThreshold + 15.0f),
+            (Bob, 5.0f));
 
         Assert.True(report.IsGuardedTowards(Anna));
         Assert.True(report.RefusesToGossipWith(Anna));
