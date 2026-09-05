@@ -1,0 +1,6 @@
+interface:
+  display_name: "You Are Not The Player"
+  short_description: "Repo-specific patterns and workflows for you-are-not-the-player"
+  default_prompt: "Use the you-are-not-the-player repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
