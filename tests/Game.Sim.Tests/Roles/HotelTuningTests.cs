@@ -177,9 +177,49 @@ public sealed class HotelTuningTests
 
         int working = session.Decisions.Count(decision =>
             decision.Goal.Type == Sim.Brain.GoalType.Work);
+
+        // Named per character, because the ratio alone hides which way it went
+        // wrong: one person shadowing a suspect all night and the whole cast
+        // drifting off the job produce the same number.
+        string breakdown = string.Join(" | ", session.Decisions
+            .GroupBy(decision => decision.Entity.Value)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => string.Concat(
+                group.Key,
+                ":",
+                group.Count(decision => decision.Goal.Type == Sim.Brain.GoalType.Work),
+                "/",
+                group.Count())));
         Assert.True(
             working > session.Decisions.Count / 4,
-            $"Only {working} of {session.Decisions.Count} decisions were the job.");
+            $"Only {working} of {session.Decisions.Count} decisions were the job. {breakdown}");
+    }
+
+    [Fact]
+    public void NobodySpendsTheNightStandingBehindOnePerson()
+    {
+        // The hidden player now leaves a trail of things worth reacting to, and
+        // the first version of that had the security guard watching them for two
+        // thirds of the shift. A cast that all points at one person is a label,
+        // not a mystery: the player would only have to notice who is being
+        // watched. Attention is bounded so it reads as somebody checking rather
+        // than somebody pointing.
+        BasementScenarioSession session = CreateSession();
+        for (int tick = 0; tick < 360 && !session.IsComplete; tick++)
+        {
+            _ = session.AdvanceOneTick();
+        }
+
+        foreach (IGrouping<string, Sim.Routines.NpcRoutineDecision> person in session.Decisions
+            .GroupBy(decision => decision.Entity.Value))
+        {
+            int attention = person.Count(decision =>
+                decision.Goal.Type is Sim.Brain.GoalType.FollowTarget
+                    or Sim.Brain.GoalType.ObserveTarget);
+            Assert.True(
+                attention * 4 < person.Count(),
+                $"{person.Key} spent {attention} of {person.Count()} decisions on one person.");
+        }
     }
 
     private static BasementScenarioSession CreateSession()

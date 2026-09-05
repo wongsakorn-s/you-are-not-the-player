@@ -55,6 +55,7 @@ public sealed class BasementScenarioSession
     private readonly Queue<AnomalyBeat> _pendingAnomalies = new();
     private readonly EntityId _hiddenPlayer;
     private readonly PlayerAiArchetype _hiddenPlayerArchetype;
+    private readonly bool _playerAiRunsAllNight;
     private WorldEvent? _restrictedEntry;
     private NpcRoutineDecision? _annaInitialDecision;
     private NpcRoutineDecision? _bobInitialDecision;
@@ -87,6 +88,7 @@ public sealed class BasementScenarioSession
         // the regression scenarios and their pinned fingerprints depend on.
         _hiddenPlayer = options.Truth?.HiddenPlayer ?? BasementScenario.George;
         _hiddenPlayerArchetype = options.Truth?.HiddenPlayerArchetype ?? PlayerAiArchetype.Explorer;
+        _playerAiRunsAllNight = options.Truth is not null;
         _world = CreateWorld();
 
         if (initialTick > 0)
@@ -183,7 +185,13 @@ public sealed class BasementScenarioSession
             _objectActions);
 
         var playerDirector = new PlayerAiDirector(
-            [CreatePlayerAiProfile(_hiddenPlayer, _hiddenPlayerArchetype)],
+            [CreatePlayerAiProfile(
+                _hiddenPlayer,
+                _hiddenPlayerArchetype,
+                // A generated case gets a night's worth of Player-like behaviour;
+                // the bare scenarios keep the single scripted objective they were
+                // fingerprinted with.
+                fullNight: options.Truth is not null)],
             _interactions,
             probes);
         _playerRoutine = new NpcRoutineSystem(
@@ -253,7 +261,7 @@ public sealed class BasementScenarioSession
             behaviorGoals,
             new NeedGoalSource(),
         };
-        var observers = new List<INpcRoutineDecisionObserver> { behaviorActions };
+        var observers = new List<INpcRoutineDecisionObserver> { behaviorActions, behaviorGoals };
         if (_options.Truth is { Secrets.Count: > 0 } truth)
         {
             _secretPlans = HotelSecretStaging.Stage(
@@ -935,6 +943,21 @@ public sealed class BasementScenarioSession
         // their post. The event this publishes is what RoleNeglect counts and what
         // the RoleDeviation suspicion rule scores.
         _ = _duties?.Tick();
+
+        // The character the whole case is about gets a decision too. Their brain
+        // lives in its own routine system so that two systems never issue movement
+        // for one actor, and the phase that ticked it ran once, near the top of
+        // the shift - so the person being steered made exactly one decision a
+        // night and stood still for the remaining five hours. Nothing they did
+        // could be deduced because they did not do anything.
+        //
+        // Zero delta because the clock belongs to the cast's tick below: two
+        // routine systems each advancing it would run the night at double speed.
+        if (_playerAiRunsAllNight)
+        {
+            _decisions.AddRange(_playerRoutine.Tick(SimDelta.Zero));
+        }
+
         IReadOnlyList<NpcRoutineDecision> decisions = _behaviorRoutine.Tick(SimDelta.OneTick);
         foreach (NpcRoutineDecision decision in decisions)
         {
@@ -1083,22 +1106,170 @@ public sealed class BasementScenarioSession
         return graph;
     }
 
+    /// <summary>
+    /// How long a burst of Player-like behaviour runs before the hidden player
+    /// goes back to looking like staff, per archetype.
+    /// </summary>
+    /// <remarks>
+    /// Each number is the threshold of the pattern that archetype is meant to
+    /// trip: BoundaryTesting wants three probes, LootSweep five interactions,
+    /// RepeatInteraction four of the same. A plan that produced four probes and
+    /// stopped would be behaviour nobody in the hotel could name.
+    /// </remarks>
+    private const int ExplorerBurst = 3;
+
+    private const int CompletionistBurst = 5;
+
+    private const int RoleplayerBurst = 4;
+
+    /// <summary>
+    /// Decisions of ordinary work between bursts. Long enough that the previous
+    /// burst has fallen out of every detection window, so each one is counted as
+    /// its own lapse rather than one long strange stretch.
+    /// </summary>
+    private const int PlayerAiRest = 48;
+
+    // Rooms a member of staff has no reason to be opening, in the order a player
+    // works through a map: the locked thing first, then everything near it.
+    private static readonly (LocationId Room, string[] Boundaries)[] ExplorerRounds =
+    [
+        // Probing happens from the side you can stand on. Sending the plan into
+        // the basement and the security room instead sent it into two doors that
+        // need a key: the move failed, the objective never completed, and the
+        // whole night stalled on the fourth thing in the list.
+        (Hallway, ["security-door", "basement-door", "room-201-door"]),
+        (new LocationId("office"), ["office-filing-cabinet", "office-safe", "office-key-press"]),
+        (new LocationId("room-201"), [
+            "room201-briefcase", "room201-nightstand-drawer", "room-201-balcony-latch"]),
+        // Back to the doors that did not open. Coming back is the part that reads
+        // as somebody working a problem rather than wandering.
+        (Hallway, ["basement-door", "security-door", "hallway-service-hatch"]),
+    ];
+
+    // Five things touched in one room inside an hour reads as sweeping it. Real
+    // objects where the hotel has them; the rest are the drawers and shelves a
+    // room has whether or not the game models them.
+    private static readonly (LocationId Room, string[] Interactions)[] CompletionistRounds =
+    [
+        (BasementScenario.Lobby, [
+            "lobby-reception-bell", "lobby-guest-registry", "lobby-pigeonholes",
+            "lobby-lost-property", "lobby-desk-drawer"]),
+        (new LocationId("kitchen"), [
+            "kitchen-pantry-safe", "kitchen-service-knife-block", "kitchen-cold-store",
+            "kitchen-delivery-log", "kitchen-bin-store"]),
+        (new LocationId("office"), [
+            "office-filing-cabinet", "office-petty-cash", "office-rota-board",
+            "office-key-press", "office-waste-bin"]),
+        (new LocationId("hallway"), [
+            "hallway-linen-cart", "hallway-fire-panel", "hallway-vending",
+            "hallway-service-hatch", "hallway-notice-board"]),
+    ];
+
+    // The tell of somebody performing an ordinary night is that the performance
+    // repeats: the same unremarkable act, four times, as though checking it counts.
+    private static readonly (LocationId Room, string Interaction)[] RoleplayerRounds =
+    [
+        (BasementScenario.Lobby, "lobby-guest-registry"),
+        (new LocationId("kitchen"), "kitchen-delivery-log"),
+        (BasementScenario.Lobby, "lobby-reception-bell"),
+        (new LocationId("hallway"), "hallway-notice-board"),
+    ];
+
+    private static ExplorationObjective[] BuildExplorationPlan()
+    {
+        var objectives = new List<ExplorationObjective>();
+        foreach ((LocationId room, string[] boundaries) in ExplorerRounds)
+        {
+            foreach (string boundary in boundaries)
+            {
+                objectives.Add(new ExplorationObjective(
+                    $"explore-{objectives.Count:00}-{boundary}",
+                    room,
+                    boundary,
+                    // A player does not hold the character's job, and it shows.
+                    ignoresRolePermissions: true));
+            }
+        }
+
+        return [.. objectives];
+    }
+
+    private static CompletionObjective[] BuildCompletionPlan()
+    {
+        var objectives = new List<CompletionObjective>();
+        foreach ((LocationId room, string[] interactions) in CompletionistRounds)
+        {
+            foreach (string interaction in interactions)
+            {
+                objectives.Add(new CompletionObjective(
+                    $"sweep-{objectives.Count:00}-{interaction}",
+                    room,
+                    InteractionKind.LootContainer,
+                    interaction,
+                    ignoresRolePermissions: true));
+            }
+        }
+
+        return [.. objectives];
+    }
+
+    private static CompletionObjective[] BuildRoleplayPlan()
+    {
+        var objectives = new List<CompletionObjective>();
+        foreach ((LocationId room, string interaction) in RoleplayerRounds)
+        {
+            for (int repeat = 0; repeat < RoleplayerBurst; repeat++)
+            {
+                objectives.Add(new CompletionObjective(
+                    $"perform-{objectives.Count:00}-{interaction}",
+                    room,
+                    InteractionKind.Generic,
+                    interaction,
+                    ignoresRolePermissions: true));
+            }
+        }
+
+        return [.. objectives];
+    }
+
     // PlayerAiProfile validates that the objective set matches the archetype, so
     // each archetype gets the objectives it is defined by: an Explorer probes a
     // boundary, a Completionist exhausts interactions, a Roleplayer does neither
     // and is only visible through how ordinary it tries to look.
     private static PlayerAiProfile CreatePlayerAiProfile(
         EntityId entity,
-        PlayerAiArchetype archetype) => archetype switch
+        PlayerAiArchetype archetype,
+        bool fullNight) => (archetype, fullNight) switch
         {
-            PlayerAiArchetype.Explorer => new PlayerAiProfile(
+            (PlayerAiArchetype.Explorer, true) => new PlayerAiProfile(
+                entity,
+                archetype,
+                explorationObjectives: BuildExplorationPlan(),
+                burstSize: ExplorerBurst,
+                restDecisions: PlayerAiRest,
+                repeats: true),
+            (PlayerAiArchetype.Completionist, true) => new PlayerAiProfile(
+                entity,
+                archetype,
+                completionObjectives: BuildCompletionPlan(),
+                burstSize: CompletionistBurst,
+                restDecisions: PlayerAiRest,
+                repeats: true),
+            (PlayerAiArchetype.Roleplayer, true) => new PlayerAiProfile(
+                entity,
+                archetype,
+                completionObjectives: BuildRoleplayPlan(),
+                burstSize: RoleplayerBurst,
+                restDecisions: PlayerAiRest,
+                repeats: true),
+            (PlayerAiArchetype.Explorer, false) => new PlayerAiProfile(
                 entity,
                 archetype,
                 explorationObjectives: [new ExplorationObjective(
                     "explore-basement",
                     BasementScenario.Basement,
                     "basement-door")]),
-            PlayerAiArchetype.Completionist => new PlayerAiProfile(
+            (PlayerAiArchetype.Completionist, false) => new PlayerAiProfile(
                 entity,
                 archetype,
                 completionObjectives:
@@ -1112,7 +1283,7 @@ public sealed class BasementScenarioSession
                         new LocationId("kitchen"),
                         InteractionKind.LootContainer),
                 ]),
-            PlayerAiArchetype.Roleplayer => new PlayerAiProfile(entity, archetype),
+            (PlayerAiArchetype.Roleplayer, false) => new PlayerAiProfile(entity, archetype),
             _ => throw new ArgumentOutOfRangeException(
                 nameof(archetype),
                 archetype,

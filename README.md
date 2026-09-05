@@ -16,7 +16,7 @@ Roadmap Phase 0–15 และ Post-MVP เขียนโค้ดครบแ�
 
 ส่วนที่พิสูจน์แล้วว่าทำงานถูกต้องและรันซ้ำได้ด้วย seed เดียวกัน
 
-- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 285/285 xUnit automated tests.
+- **Core Simulation & Determinism:** Pure C# .NET 8 simulation, deterministic clock, PCG32 RNG implementation (เชื่อมเข้ากับ `CaseGenerator` แล้ว), strongly typed IDs, Entity/Location topology, immutable WorldEvent stream, atomic MoveEntity, deterministic JSONL event logger, 292/292 xUnit automated tests.
 - **Perception, Memory & Suspicion:** Visual/Audio observation, Episodic/Social MemoryStore, RootEventId rumor lineage, confidence decay, 11 data-driven SuspicionRules, EvidenceContribution, SuspicionVector 6 มิติ (Criminality, Secrecy, RoleDeviation, MetaBehavior, ImpossibleBehavior, Deception).
 - **NPC Brain & Autonomous Feedback Loop:** Daily Schedule, Needs, Role permissions, deterministic Utility-based NPC Brain, Secret Plans (theft/secret meeting/night owl), belief-driven goals (observe/follow/ask/share/avoid/confront), rule-based behavior pattern detectors.
 - **Sim Clock ตรงกับนาฬิกาของเกม:** เดิม `SimClock.TimeOfDay` คิดว่า 1 tick = ¼ วินาที (240 ticks = 1 นาที) ขณะที่ HUD คิดว่า 1 tick = 1 นาที ตารางจึงค้างที่ 00:00 ทั้งคืน; เพิ่ม `startOfDay` กับ `ticksPerMinute` โดย session ส่ง 23:00 กับ 1 เมื่อมี `SessionTruth`.
@@ -48,6 +48,16 @@ Roadmap Phase 0–15 และ Post-MVP เขียนโค้ดครบแ�
 anomaly ครั้งเดียวดัน exposure ไป 60 และ coalition ไป 204–330 ทำให้ผู้เล่นถูกล้อมจับที่
 20–38% ของกะ **ฉากจบที่เพิ่งทำเสร็จจึงไปไม่ถึงเลย** รายละเอียดและข้อค้นพบที่เหลืออยู่ใน
 `playtest/first-night-findings.md`.
+- **ทำให้เบาะแสธรรมดาชี้ถูกคน:** พบว่า `_playerRoutine.Tick()` ถูกเรียกเฉพาะใน phase
+`ExplorerMovement` ซึ่งเกิดครั้งเดียวตอนต้นคืน — **ตัวละครที่ทั้งเกมพูดถึงจึงตัดสินใจ 1 ครั้งต่อคืน
+แล้วยืนนิ่งอีก 355 tick** ทำให้ 7 คืนที่ไม่มี anomaly มีแฟ้มคดีที่ไม่มีข้อมูลใด ๆ เกี่ยวกับคำตอบ
+และจัดอันดับได้ 0–1 คนทั้งโรงแรม; ตอนนี้ Player AI เดินทุก tick (gate ด้วย `Truth is not null`)
+และทั้งสาม archetype มีแผนทั้งคืนที่วนซ้ำ โดยขนาดแต่ละชุดตั้งให้ตรงเกณฑ์ของ pattern ที่ควรจุด
+(BoundaryTesting 3 / LootSweep 5 / RepeatInteraction 4 — กฎที่เขียนไว้นานแล้วและไม่เคยถูกจุด)
+พร้อมจำกัดความสนใจของ NPC ไว้ 12 การตัดสินใจแล้วพัก 40 เพราะพอ hidden player มีร่องรอย
+ยามก็ตามเขา 231 จาก 357 การตัดสินใจ ซึ่งกลายเป็นเฉลยแบบใหม่ **ผลวัด: คนที่ถูกบงการขึ้นอันดับ 1
+ครบทั้ง 7 คืน** — แต่แลกมาด้วยปัญหาใหม่ที่ยังไม่แก้ คือชื่ออันดับหนึ่งถูกเสมอ และทั้งโรงแรม
+มีคนที่มีความสงสัยติดตัวเพียง 1–3 คน (ตัวลวงยังไม่สร้างหลักฐานที่ใครเห็น).
 - **ปรับบาลานซ์จากคืนที่เล่นจริง:** บันได exposure เป็น 12 / 70 / 130 (เดิม 15 / 40 / 80) —
 ขั้นล่างต่ำกว่าน้ำหนักของการทิ้งเคาน์เตอร์ (14.4) ซึ่งเดิมพลาดเกณฑ์ไปแค่ 0.6 และขั้นบนสูงกว่า
 anomaly หนึ่งครั้ง (60) ที่เดิมข้ามสองขั้นรวด; `roleNeglectCount` 3 → 2 ให้การทิ้งหน้าที่ไปสืบ
@@ -2518,7 +2528,7 @@ Foundation และ Post-MVP Deliverables เสร็จสมบูรณ์�
 - [x] Suspicion derived จาก evidence
 - [x] ทุก suspicion score explain ได้
 - [x] Headless Basement Test ผ่าน
-- [x] Automated tests ผ่าน (285/285 tests passed)
+- [x] Automated tests ผ่าน (292/292 tests passed)
 - [x] SimRunner รัน 10,000 ticks ได้
 - [x] SimRunner รันหลายร้อยรอบได้
 - [x] Godot adapter สามารถแสดงผล simulation ได้
@@ -2585,7 +2595,7 @@ suspect diversity, hypothesis changes, false-positive understanding, pacing แ�
 ว่าคืนแรกของทุกคนคือ seed เดียวกัน (`481516`) ซึ่งเป็นคืนที่ข้อมูลเยอะที่สุดใน 15 คืนที่วัด
 จึงต้องให้ผู้เล่นเล่นรอบสองก่อนสรุป.
 7. **Milestone 7 — Presentation Polish:** เพิ่ม portraits, room art, sprite animation, anomaly effects และ audio ทีละระบบหลัง gameplay ผ่านเกณฑ์.
-8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 285/285 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
+8. **Engineering Gate (ผ่านระดับ local/CI):** build 0 warning, tests 292/292 และ headless smoke ไทย/อังกฤษผ่าน; เหลือตรวจ Windows export artifact บนเครื่องแจก build จริง.
 
 ความคืบหน้า Technical/3D Prototype Stabilization:
 
@@ -2613,7 +2623,8 @@ suspect diversity, hypothesis changes, false-positive understanding, pacing แ�
 - [x] เพิ่ม seed-driven case variation พร้อม same-seed deterministic replay
 - [x] เล่นคืนแรกภายในครบ 15 seed ด้วย `--night-report` และบันทึกผลไว้
 - [x] ปรับบาลานซ์จากผลคืนแรก (เกณฑ์ exposure, จังหวะ Closing Net, ถ้อยคำที่เฉลยคำตอบ) แล้ววัดซ้ำ
-- [ ] แก้ให้การอนุมานจากเบาะแสธรรมดาชี้ถูกคนโดยไม่ต้องพึ่ง anomaly
+- [x] แก้ให้การอนุมานจากเบาะแสธรรมดาชี้ถูกคนโดยไม่ต้องพึ่ง anomaly
+- [ ] ทำให้ตัวลวงแข่งได้ — ตอนนี้ชื่ออันดับหนึ่งในแฟ้มคดีถูกเสมอ
 - [x] เพิ่ม metric ของ Exposure / Contradiction / Closing Net และฉากจบลงใน playtest protocol และแบบฟอร์ม
 - [ ] เล่น First Fun Playtest และแก้ readability/pacing จากข้อมูลจริง
 - [ ] นำ visual/audio กลับแบบวัดประสิทธิภาพทีละระบบ

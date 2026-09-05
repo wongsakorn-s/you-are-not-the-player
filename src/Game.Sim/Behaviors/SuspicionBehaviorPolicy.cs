@@ -8,8 +8,12 @@ public sealed record SuspicionBehaviorPolicy
         float followThreshold = 15.0f,
         float shareThreshold = 25.0f,
         float avoidCriminalityThreshold = 20.0f,
-        float maxBeliefWeight = float.MaxValue)
+        float maxBeliefWeight = float.MaxValue,
+        int attentionSpellDecisions = int.MaxValue,
+        int attentionRestDecisions = 0)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(attentionSpellDecisions);
+        ArgumentOutOfRangeException.ThrowIfNegative(attentionRestDecisions);
         ValidateThreshold(observeThreshold, nameof(observeThreshold));
         ValidateThreshold(askThreshold, nameof(askThreshold));
         ValidateThreshold(followThreshold, nameof(followThreshold));
@@ -21,6 +25,8 @@ public sealed record SuspicionBehaviorPolicy
         ShareThreshold = shareThreshold;
         AvoidCriminalityThreshold = avoidCriminalityThreshold;
         MaxBeliefWeight = maxBeliefWeight;
+        AttentionSpellDecisions = attentionSpellDecisions;
+        AttentionRestDecisions = attentionRestDecisions;
     }
 
     public float ObserveThreshold { get; }
@@ -45,6 +51,23 @@ public sealed record SuspicionBehaviorPolicy
     /// replace it.
     /// </remarks>
     public float MaxBeliefWeight { get; }
+
+    /// <summary>
+    /// How many decisions in a row somebody will spend watching or shadowing one
+    /// person before their own night reasserts itself.
+    /// </summary>
+    /// <remarks>
+    /// Suspicion does not fade on its own, so a character who has seen something
+    /// damning keeps choosing to attend to it for as long as they remember it. A
+    /// guard who spends two thirds of a shift standing near one guest is not a
+    /// hotel reacting - it is a spotlight, and it hands the player the answer
+    /// without them working anything out. Bounding only the shadowing moved the
+    /// same behaviour into watching from across the room, so this covers both.
+    /// </remarks>
+    public int AttentionSpellDecisions { get; }
+
+    /// <summary>Decisions before the same person is worth watching again.</summary>
+    public int AttentionRestDecisions { get; }
 
     private static void ValidateThreshold(float value, string parameterName)
     {

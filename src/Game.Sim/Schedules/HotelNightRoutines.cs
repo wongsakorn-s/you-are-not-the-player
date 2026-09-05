@@ -175,7 +175,11 @@ public static class HotelNightRoutines
     /// stopped being a place the player can read.
     /// </remarks>
     public static Behaviors.SuspicionBehaviorPolicy BehaviorPolicy() => new(
-        maxBeliefWeight: 45.0f);
+        maxBeliefWeight: 45.0f,
+        // Long enough to walk after somebody and see where they went, short
+        // enough that the rest of the shift still happens.
+        attentionSpellDecisions: 12,
+        attentionRestDecisions: 40);
 
     private static DailySchedule Build(
         params (int StartHour, int StartMinute, int EndHour, int EndMinute,

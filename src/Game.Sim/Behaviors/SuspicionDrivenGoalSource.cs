@@ -2,12 +2,13 @@ using Game.Sim.Brain;
 using Game.Sim.Entities;
 using Game.Sim.Locations;
 using Game.Sim.Memory;
+using Game.Sim.Routines;
 using Game.Sim.Suspicion;
 using Game.Sim.Time;
 
 namespace Game.Sim.Behaviors;
 
-public sealed class SuspicionDrivenGoalSource : INpcGoalSource
+public sealed class SuspicionDrivenGoalSource : INpcGoalSource, INpcRoutineDecisionObserver
 {
     private const float ObserveBaseUtility = 20.0f;
     private const float AskBaseUtility = 25.0f;
@@ -20,6 +21,8 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
     private readonly SimClock _clock;
     private readonly SuspicionBehaviorRepository _profiles;
     private readonly SuspicionBehaviorPolicy _policy;
+    private readonly Dictionary<EntityId, int> _attentionSpell = [];
+    private readonly Dictionary<EntityId, int> _attentionRest = [];
 
     public SuspicionDrivenGoalSource(
         SuspicionSystem suspicion,
@@ -67,7 +70,12 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
 
             if (targetLocation is LocationId knownTargetLocation)
             {
-                AddTargetGoals(goals, snapshot.Subject, knownTargetLocation, concern);
+                AddTargetGoals(
+                    goals,
+                    snapshot.Subject,
+                    knownTargetLocation,
+                    concern,
+                    mayAttend: !_attentionRest.TryGetValue(context.Entity.Id, out int rest) || rest <= 0);
             }
 
             if (contact is not null)
@@ -95,6 +103,43 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
         return goals;
     }
 
+    /// <summary>
+    /// Counts how long somebody has been giving one person their attention, so
+    /// that it can end.
+    /// </summary>
+    public void Observe(NpcRoutineDecision decision)
+    {
+        ArgumentNullException.ThrowIfNull(decision);
+        if (_attentionRest.TryGetValue(decision.Entity, out int rest) && rest > 0)
+        {
+            _attentionRest[decision.Entity] = rest - 1;
+        }
+
+        if (decision.Goal.Type is not (GoalType.FollowTarget or GoalType.ObserveTarget))
+        {
+            // Eases off rather than resetting. Requiring an unbroken run let a
+            // character watch somebody eleven decisions out of twelve all night
+            // and never once trip the limit, which is the behaviour this exists
+            // to stop.
+            if (_attentionSpell.TryGetValue(decision.Entity, out int cooling) && cooling > 0)
+            {
+                _attentionSpell[decision.Entity] = cooling - 1;
+            }
+
+            return;
+        }
+
+        int spell = _attentionSpell.TryGetValue(decision.Entity, out int current) ? current + 1 : 1;
+        if (spell < _policy.AttentionSpellDecisions)
+        {
+            _attentionSpell[decision.Entity] = spell;
+            return;
+        }
+
+        _attentionSpell[decision.Entity] = 0;
+        _attentionRest[decision.Entity] = _policy.AttentionRestDecisions;
+    }
+
     private ContactBelief? FindKnownContact(SuspicionBehaviorProfile profile)
     {
         foreach (EntityId contact in profile.Contacts)
@@ -113,9 +158,10 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
         List<GoalCandidate> goals,
         EntityId subject,
         LocationId location,
-        float concern)
+        float concern,
+        bool mayAttend)
     {
-        if (concern >= _policy.ObserveThreshold)
+        if (mayAttend && concern >= _policy.ObserveThreshold)
         {
             goals.Add(CreateGoal(
                 GoalType.ObserveTarget,
@@ -126,7 +172,7 @@ public sealed class SuspicionDrivenGoalSource : INpcGoalSource
                 contact: null));
         }
 
-        if (concern >= _policy.FollowThreshold)
+        if (mayAttend && concern >= _policy.FollowThreshold)
         {
             goals.Add(CreateGoal(
                 GoalType.FollowTarget,

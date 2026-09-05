@@ -3400,6 +3400,63 @@ public sealed partial class Hotel2DPrototype : Node2D
             .Select(group => $"{group.Key} x{group.Count()} ({group.Sum(r => r.Weight):F0})"));
     }
 
+    /// <summary>
+    /// Where the character the seed actually put behind the Player ranked in the
+    /// case file the player was reading, and what the file held on them next to
+    /// whoever outranked them.
+    /// </summary>
+    /// <remarks>
+    /// Uses the hidden truth, which nothing the player can see is allowed to do.
+    /// The night report is a development artefact and never reaches a build a
+    /// tester runs, but it is the only way to ask whether the ordinary evidence
+    /// points anywhere near the answer.
+    /// </remarks>
+    private string DescribeAnswerRank(PlayerJournal journal)
+    {
+        if (_truth is null)
+        {
+            return "unknown";
+        }
+
+        SuspicionSnapshot[] ranked =
+        [
+            .. journal.SuspicionSnapshots
+                .Where(snapshot => snapshot.Subject != _humanHost)
+                .OrderByDescending(TotalSuspicion),
+        ];
+        int index = Array.FindIndex(ranked, snapshot => snapshot.Subject == _truth.HiddenPlayer);
+        if (index < 0)
+        {
+            return $"nowhere - the file holds nothing at all on {_truth.HiddenPlayer.Value} " +
+                $"(it ranks {ranked.Length} other people)";
+        }
+
+        string line = $"{index + 1} of {ranked.Length} " +
+            $"(score {TotalSuspicion(ranked[index]):F0}, top is {ranked[0].Subject.Value} " +
+            $"at {TotalSuspicion(ranked[0]):F0})";
+        return line +
+            System.Environment.NewLine +
+            $"  - on the answer ({_truth.HiddenPlayer.Value}): {DescribeEvidence(ranked[index])}" +
+            System.Environment.NewLine +
+            $"  - on the top name ({ranked[0].Subject.Value}): {DescribeEvidence(ranked[0])}";
+    }
+
+    private static float TotalSuspicion(SuspicionSnapshot snapshot) =>
+        snapshot.Vector.Criminality +
+        snapshot.Vector.Secrecy +
+        snapshot.Vector.RoleDeviation +
+        snapshot.Vector.MetaBehavior +
+        snapshot.Vector.ImpossibleBehavior +
+        snapshot.Vector.Deception;
+
+    private static string DescribeEvidence(SuspicionSnapshot snapshot) =>
+        snapshot.Evidence.Count == 0
+            ? "nothing"
+            : string.Join(", ", snapshot.Evidence
+                .GroupBy(evidence => evidence.Contribution.RuleId, StringComparer.Ordinal)
+                .OrderByDescending(group => group.Sum(evidence => evidence.EffectiveStrength))
+                .Select(group => $"{group.Key} x{group.Count()}"));
+
     private void WriteNightReport()
     {
         if (_nightReport is null || _simulation is null || _truth is null)
@@ -3423,6 +3480,7 @@ public sealed partial class Hotel2DPrototype : Node2D
             $"world events: {_simulation.Events.Count}",
             $"npc decisions: {_simulation.Decisions.Count} ({(_simulation.Decisions.Count == 0 ? 0 : idle * 100 / _simulation.Decisions.Count)}% idle)",
             "what the hotel has on you: " + DescribeExposureReasons(),
+            "where the answer sat in your own case file: " + DescribeAnswerRank(journal),
             "duty lapses recorded against you: " + _simulation.Events.Count(
                 worldEvent => worldEvent.Type == EventType.RoleDutyMissed &&
                     worldEvent.Actor == _humanHost),
